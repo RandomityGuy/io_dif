@@ -1,0 +1,3 @@
+[submodule "3rdparty/DifBuilder"]
+	path = 3rdparty/DifBuilder
+	url = https://github.com/RandomityGuy/DifBuilder.git
