@@ -3,10 +3,12 @@ project(DifBuilderLib)
 
 add_subdirectory("3rdparty/DifBuilder")
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
+set(CMAKE_CXX_FLAGS "/MT")
+set(CMAKE_CXX_FLAGS_RELEASE "/MT")
+set(CMAKE_CXX_FLAGS_DEBUG "/MTd /FS")
 
 set(SOURCE_FILES DifBuilderLib.cpp)
-add_library(DifBuilderLib ${SOURCE_FILES})
+add_library(DifBuilderLib SHARED ${SOURCE_FILES})
 
 include_directories(3rdparty/DifBuilder/include)
 include_directories(3rdparty/DifBuilder/3rdparty/)
