@@ -42,6 +42,33 @@ bl_info = {
     "category": "Generic",
 }
 
+class InteriorSettings(bpy.types.PropertyGroup):
+    interior_type = EnumProperty(
+        name="Interior Type",
+        items=(
+            ("static_interior", "InteriorResource", "Normal static interior"),
+            ("pathed_interior", "PathedInterior", "Moving interior")
+        ),
+        default="static_interior")
+
+    marker_path = PointerProperty(type=bpy.types.Curve, name="Marker Path")
+
+class InteriorPanel(bpy.types.Panel):
+    bl_label = "DIF properties"
+    bl_idname = "dif_properties"
+    bl_space_type = "PROPERTIES"
+    bl_region_type = "WINDOW"
+    bl_context = "object"
+
+    def draw(self, context):
+        layout = self.layout;
+        obj = context
+
+        sublayout = layout.row()
+        sublayout.prop(context.object.dif_props,"interior_type")
+        sublayout = layout.row()
+        sublayout.prop(context.object.dif_props,"marker_path")
+        sublayout.active = context.object.dif_props.interior_type == "pathed_interior"
 
 class ExportDIF(bpy.types.Operator, ExportHelper):
     """Save a Torque DIF File"""
@@ -103,13 +130,20 @@ def register():
     for cls in classes:
         bpy.utils.register_class(cls)
     bpy.types.TOPBAR_MT_file_export.append(menu_func_export_dif)
+    bpy.utils.register_class(InteriorPanel)
+    bpy.utils.register_class(InteriorSettings)
+
+    bpy.types.Object.dif_props = PointerProperty(type=InteriorSettings)
 
 
 def unregister():
     for cls in classes:
         bpy.utils.unregister_class(cls)
     bpy.types.TOPBAR_MT_file_export.remove(menu_func_export_dif)
+    bpy.utils.unregister_class(InteriorPanel)
+    bpy.utils.unregister_class(InteriorSettings)
 
+    del bpy.types.Object.dif_props
 
 if __name__ == "__main__":
     register()
