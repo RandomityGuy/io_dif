@@ -42,6 +42,12 @@ difbuilderlib.push_marker.argtypes = [
     ctypes.c_int,
     ctypes.c_int,
 ]
+difbuilderlib.add_game_entity.argtypes = [
+    ctypes.c_void_p,
+    ctypes.c_char_p,
+    ctypes.c_char_p,
+    ctypes.POINTER(ctypes.c_float),
+]
 
 scene = bpy.context.scene
 
@@ -70,6 +76,15 @@ class Dif:
     def write_dif(self, path):
         difbuilderlib.write_dif(
             self.__ptr__, ctypes.create_string_buffer(path.encode("ascii"))
+        )
+
+    def add_game_entity(self, gameClass, datablock, position):
+        vecarr = (ctypes.c_float * len(position))(*position)
+        difbuilderlib.add_game_entity(
+            self.__ptr__,
+            ctypes.create_string_buffer(gameClass.encode("ascii")),
+            ctypes.create_string_buffer(datablock.encode("ascii")),
+            vecarr,
         )
 
 
@@ -203,6 +218,11 @@ def build_pathed_interior(ob: Object, marker_ob: Curve, offset, flip, double):
     return (dif, marker_list)
 
 
+def build_game_entity(ob: Object):
+    props = ob.dif_props
+    return (props.game_entity_datablock, props.game_entity_gameclass)
+
+
 def save(context, filepath: str = "", flip=False, double=False, maxtricount=16000):
     import bpy
     import bmesh
@@ -274,6 +294,7 @@ def save(context, filepath: str = "", flip=False, double=False, maxtricount=1600
                     tris += 1
 
     mp_list = []
+    game_entities: list[Object] = []
 
     for ob in obs:
         ob_eval = ob
@@ -292,6 +313,9 @@ def save(context, filepath: str = "", flip=False, double=False, maxtricount=1600
         if dif_props.interior_type == "pathed_interior":
             mp_list.append((ob_eval, dif_props.marker_path))
 
+        if dif_props.interior_type == "game_entity":
+            game_entities.append(ob_eval)
+
     mp_difs = []
 
     for (mp, curve) in mp_list:
@@ -304,4 +328,13 @@ def save(context, filepath: str = "", flip=False, double=False, maxtricount=1600
                     builders[i].add_pathed_interior(mpdif, markerlist)
 
             dif = builders[i].build()
+
+            if i == 0:
+                for ge in game_entities:
+                    dif.add_game_entity(
+                        ge.dif_props.game_entity_gameclass,
+                        ge.dif_props.game_entity_datablock,
+                        ge.location,
+                    )
+
             dif.write_dif(str(Path(filepath).with_suffix("")) + str(i) + ".dif")

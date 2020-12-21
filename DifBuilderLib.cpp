@@ -77,4 +77,13 @@ extern "C"
 		m.initialPathPosition = initialPathPosition;
 		markerlist->push_back(m);
 	}
+
+	void add_game_entity(DIF::DIF *dif, char *gameClass, char *datablock, float *pos)
+	{
+		DIF::GameEntity g;
+		g.datablock = std::string(datablock);
+		g.gameClass = std::string(gameClass);
+		g.position = glm::vec3(pos[0], pos[1], pos[2]);
+		dif->gameEntity.push_back(g);
+	}
 }
