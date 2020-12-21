@@ -20,6 +20,7 @@ if "bpy" in locals():
 import bpy
 from bpy.props import (
     BoolProperty,
+    CollectionProperty,
     FloatProperty,
     IntProperty,
     StringProperty,
@@ -42,16 +43,22 @@ bl_info = {
     "category": "Generic",
 }
 
+
 class InteriorSettings(bpy.types.PropertyGroup):
     interior_type = EnumProperty(
-        name="Interior Type",
+        name="Interior Entity Type",
         items=(
             ("static_interior", "InteriorResource", "Normal static interior"),
-            ("pathed_interior", "PathedInterior", "Moving interior")
+            ("pathed_interior", "PathedInterior", "Moving interior"),
+            ("game_entity", "Game Entity", "An entity in the game"),
         ),
-        default="static_interior")
+        default="static_interior",
+    )
 
     marker_path = PointerProperty(type=bpy.types.Curve, name="Marker Path")
+    game_entity_datablock = StringProperty(name="Datablock")
+    game_entity_gameclass = StringProperty(name="Game Class")
+
 
 class InteriorPanel(bpy.types.Panel):
     bl_label = "DIF properties"
@@ -61,14 +68,20 @@ class InteriorPanel(bpy.types.Panel):
     bl_context = "object"
 
     def draw(self, context):
-        layout = self.layout;
+        layout = self.layout
         obj = context
 
         sublayout = layout.row()
-        sublayout.prop(context.object.dif_props,"interior_type")
-        sublayout = layout.row()
-        sublayout.prop(context.object.dif_props,"marker_path")
-        sublayout.active = context.object.dif_props.interior_type == "pathed_interior"
+        sublayout.prop(context.object.dif_props, "interior_type")
+        if context.object.dif_props.interior_type == "pathed_interior":
+            sublayout = layout.row()
+            sublayout.prop(context.object.dif_props, "marker_path")
+        if context.object.dif_props.interior_type == "game_entity":
+            sublayout = layout.row()
+            sublayout.prop(context.object.dif_props, "game_entity_datablock")
+            sublayout = layout.row()
+            sublayout.prop(context.object.dif_props, "game_entity_gameclass")
+
 
 class ExportDIF(bpy.types.Operator, ExportHelper):
     """Save a Torque DIF File"""
@@ -144,6 +157,7 @@ def unregister():
     bpy.utils.unregister_class(InteriorSettings)
 
     del bpy.types.Object.dif_props
+
 
 if __name__ == "__main__":
     register()
