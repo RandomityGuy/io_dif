@@ -46,9 +46,9 @@ extern "C"
 		return new DIF::DIF(dif);
 	}
 
-	void add_pathed_interior(DIF::DIFBuilder *builder, DIF::DIF *dif)
+	void add_pathed_interior(DIF::DIFBuilder *builder, DIF::DIF *dif, std::vector<DIF::Marker> *markerlist)
 	{
-		builder->addPathedInterior(dif->interior[0], std::vector<DIF::Marker>());
+		builder->addPathedInterior(dif->interior[0], *markerlist);
 	}
 
 	void write_dif(DIF::DIF *dif, char *path)
@@ -56,5 +56,25 @@ extern "C"
 		std::ofstream outStr;
 		outStr.open(path, std::ios::out | std::ios::binary);
 		dif->write(outStr, DIF::Version());
+	}
+
+	std::vector<DIF::Marker> *new_marker_list()
+	{
+		return new std::vector<DIF::Marker>();
+	}
+
+	void dispose_marker_list(std::vector<DIF::Marker> *markerlist)
+	{
+		delete markerlist;
+	}
+
+	void push_marker(std::vector<DIF::Marker> *markerlist, float *pos, int msToNext, int initialPathPosition)
+	{
+		DIF::Marker m;
+		m.position = glm::vec3(pos[0], pos[1], pos[2]);
+		m.msToNext = msToNext;
+		m.smoothing = 0;
+		m.initialPathPosition = initialPathPosition;
+		markerlist->push_back(m);
 	}
 }

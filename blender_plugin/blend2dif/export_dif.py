@@ -4,7 +4,7 @@ import ctypes
 import os
 from pathlib import Path
 
-from bpy.types import Mesh, Object
+from bpy.types import Curve, Mesh, Object
 
 dllpath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "DifBuilderLib.dll")
 difbuilderlib = ctypes.CDLL(dllpath)
@@ -28,16 +28,43 @@ difbuilderlib.build.restype = ctypes.c_void_p
 difbuilderlib.dispose_dif.argtypes = [ctypes.c_void_p]
 difbuilderlib.write_dif.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
 
+difbuilderlib.add_pathed_interior.argtypes = [
+    ctypes.c_void_p,
+    ctypes.c_void_p,
+    ctypes.c_void_p,
+]
+
+difbuilderlib.new_marker_list.restype = ctypes.c_void_p
+difbuilderlib.dispose_marker_list.argtypes = [ctypes.c_void_p]
+difbuilderlib.push_marker.argtypes = [
+    ctypes.c_void_p,
+    ctypes.POINTER(ctypes.c_float),
+    ctypes.c_int,
+    ctypes.c_int,
+]
+
 scene = bpy.context.scene
 
 obj = bpy.context.active_object
+
+
+class MarkerList:
+    def __init__(self):
+        self.__ptr__ = difbuilderlib.new_marker_list()
+
+    def __del__(self):
+        difbuilderlib.dispose_marker_list(self.__ptr__)
+
+    def push_marker(self, vec, msToNext, initialPathPosition):
+        vecarr = (ctypes.c_float * len(vec))(*vec)
+        difbuilderlib.push_marker(self.__ptr__, vecarr, msToNext, initialPathPosition)
 
 
 class Dif:
     def __init__(self, ptr):
         self.__ptr__ = ptr
 
-    def dispose(self):
+    def __del__(self):
         difbuilderlib.dispose_dif(self.__ptr__)
 
     def write_dif(self, path):
@@ -50,7 +77,7 @@ class DifBuilder:
     def __init__(self):
         self.__ptr__ = difbuilderlib.new_difbuilder()
 
-    def dispose(self):
+    def __del__(self):
         difbuilderlib.dispose_difbuilder(self.__ptr__)
 
     def add_triangle(self, p1, p2, p3, uv1, uv2, uv3, n, material):
@@ -69,6 +96,9 @@ class DifBuilder:
         difbuilderlib.add_triangle(
             self.__ptr__, p3arr, p2arr, p1arr, uv3arr, uv2arr, uv1arr, narr, mat
         )
+
+    def add_pathed_interior(self, dif: Dif, markerlist: MarkerList):
+        difbuilderlib.add_pathed_interior(self.__ptr__, dif.__ptr__, markerlist.__ptr__)
 
     def build(self):
         return Dif(difbuilderlib.build(self.__ptr__))
@@ -108,6 +138,69 @@ def get_offset():
     off = [((maxv[i] - minv[i]) / 2) + 50 for i in range(0, 3)]
     print(off)
     return off
+
+
+def build_pathed_interior(ob: Object, marker_ob: Curve, offset, flip, double):
+    difbuilder = DifBuilder()
+    mesh = ob.to_mesh()
+    mesh_triangulate(mesh)
+
+    mesh_verts = mesh.vertices
+
+    active_uv_layer = mesh.uv_layers.active.data
+
+    for poly in mesh.polygons:
+
+        rawp1 = mesh_verts[poly.vertices[0]].co
+        rawp2 = mesh_verts[poly.vertices[1]].co
+        rawp3 = mesh_verts[poly.vertices[2]].co
+
+        p1 = [rawp1[i] + offset[i] for i in range(0, 3)]
+        p2 = [rawp2[i] + offset[i] for i in range(0, 3)]
+        p3 = [rawp3[i] + offset[i] for i in range(0, 3)]
+
+        uv = [
+            active_uv_layer[l].uv[:]
+            for l in range(poly.loop_start, poly.loop_start + poly.loop_total)
+        ]
+
+        uv1 = uv[0]
+        uv2 = uv[1]
+        uv3 = uv[2]
+
+        n = mesh_verts[poly.vertices[0]].normal
+
+        material = (
+            "NULL"
+            if (len(mesh.materials) == 0)
+            else mesh.materials[poly.material_index].name
+        )
+
+        if not flip:
+            difbuilder.add_triangle(p1, p2, p3, uv1, uv2, uv3, n, material)
+            if double:
+                difbuilder.add_triangle(p3, p2, p1, uv3, uv2, uv1, n, material)
+        else:
+            difbuilder.add_triangle(p3, p2, p1, uv3, uv2, uv1, n, material)
+            if double:
+                difbuilder.add_triangle(p1, p2, p3, uv1, uv2, uv3, n, material)
+
+    dif = difbuilder.build()
+
+    marker_pts = (
+        marker_ob.splines[0].bezier_points
+        if (len(marker_ob.splines[0].bezier_points) != 0)
+        else marker_ob.splines[0].points
+    )
+    msToNext = int((marker_ob.path_duration / len(marker_pts)))
+    initialPathPosition = int(marker_ob.eval_time)
+
+    marker_list = MarkerList()
+
+    for pt in marker_pts:
+        marker_list.push_marker(pt.co, msToNext, initialPathPosition)
+
+    return (dif, marker_list)
 
 
 def save(context, filepath: str = "", flip=False, double=False, maxtricount=16000):
@@ -180,18 +273,35 @@ def save(context, filepath: str = "", flip=False, double=False, maxtricount=1600
                     difbuilder.add_triangle(p1, p2, p3, uv1, uv2, uv3, n, material)
                     tris += 1
 
+    mp_list = []
+
     for ob in obs:
         ob_eval = ob
+
+        dif_props = ob_eval.dif_props
 
         try:
             me = ob_eval.to_mesh()
         except RuntimeError:
             continue
 
-        me.transform(ob.matrix_world)
+        if dif_props.interior_type == "static_interior":
+            me.transform(ob.matrix_world)
+            save_mesh(me, off, flip, double)
 
-        save_mesh(me, off, flip, double)
+        if dif_props.interior_type == "pathed_interior":
+            mp_list.append((ob_eval, dif_props.marker_path))
 
-    for i in range(0, len(builders)):
-        dif = builders[i].build()
-        dif.write_dif(str(Path(filepath).with_suffix("")) + str(i) + ".dif")
+    mp_difs = []
+
+    for (mp, curve) in mp_list:
+        mp_difs.append(build_pathed_interior(mp, curve, off, flip, double))
+
+    if tris != 0:
+        for i in range(0, len(builders)):
+            if i == 0:
+                for (mpdif, markerlist) in mp_difs:
+                    builders[i].add_pathed_interior(mpdif, markerlist)
+
+            dif = builders[i].build()
+            dif.write_dif(str(Path(filepath).with_suffix("")) + str(i) + ".dif")
