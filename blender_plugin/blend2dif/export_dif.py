@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 
 from bpy.types import Curve, Mesh, Object
+from bpy_extras.wm_utils.progress_report import ProgressReport, ProgressReportSubstep
 
 dllpath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "DifBuilderLib.dll")
 difbuilderlib = ctypes.CDLL(dllpath)
@@ -129,6 +130,18 @@ def mesh_triangulate(me):
     bm.free()
 
 
+def resolve_texture(ob: Object):
+    if len(ob.material_slots) == 0:
+        return "NULL"
+
+    mat = ob.material_slots[0].material
+    img = mat.node_tree.nodes.get("Image Texture", None)
+    if img == None:
+        return mat.name
+
+    return img.image.name
+
+
 def get_offset():
     obs = bpy.context.scene.objects
     minv = [1e9, 1e9, 1e9]
@@ -151,7 +164,6 @@ def get_offset():
                     maxv[i] = vert.co[i]
 
     off = [((maxv[i] - minv[i]) / 2) + 50 for i in range(0, 3)]
-    print(off)
     return off
 
 
@@ -185,11 +197,7 @@ def build_pathed_interior(ob: Object, marker_ob: Curve, offset, flip, double):
 
         n = mesh_verts[poly.vertices[0]].normal
 
-        material = (
-            "NULL"
-            if (len(mesh.materials) == 0)
-            else mesh.materials[poly.material_index].name
-        )
+        material = resolve_texture(ob)
 
         if not flip:
             difbuilder.add_triangle(p1, p2, p3, uv1, uv2, uv3, n, material)
@@ -223,7 +231,13 @@ def build_game_entity(ob: Object):
     return (props.game_entity_datablock, props.game_entity_gameclass)
 
 
-def save(context, filepath: str = "", flip=False, double=False, maxtricount=16000):
+def save(
+    context: bpy.types.Context,
+    filepath: str = "",
+    flip=False,
+    double=False,
+    maxtricount=16000,
+):
     import bpy
     import bmesh
 
@@ -237,7 +251,7 @@ def save(context, filepath: str = "", flip=False, double=False, maxtricount=1600
 
     tris = 0
 
-    def save_mesh(mesh: Mesh, offset, flip=False, double=False):
+    def save_mesh(obj: Object, mesh: Mesh, offset, flip=False, double=False):
         import bpy
 
         nonlocal tris, difbuilder
@@ -274,11 +288,7 @@ def save(context, filepath: str = "", flip=False, double=False, maxtricount=1600
 
             n = mesh_verts[poly.vertices[0]].normal
 
-            material = (
-                "NULL"
-                if (len(mesh.materials) == 0)
-                else mesh.materials[poly.material_index].name
-            )
+            material = resolve_texture(obj)
 
             if not flip:
                 difbuilder.add_triangle(p1, p2, p3, uv1, uv2, uv3, n, material)
@@ -308,7 +318,7 @@ def save(context, filepath: str = "", flip=False, double=False, maxtricount=1600
 
         if dif_props.interior_type == "static_interior":
             me.transform(ob.matrix_world)
-            save_mesh(me, off, flip, double)
+            save_mesh(ob, me, off, flip, double)
 
         if dif_props.interior_type == "pathed_interior":
             mp_list.append((ob_eval, dif_props.marker_path))

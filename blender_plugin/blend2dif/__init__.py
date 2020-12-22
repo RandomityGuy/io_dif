@@ -16,6 +16,8 @@ if "bpy" in locals():
 
     if "export_dif" in locals():
         importlib.reload(export_dif)
+    if "import_dif" in locals():
+        importlib.reload(import_dif)
 
 import bpy
 from bpy.props import (
@@ -83,6 +85,44 @@ class InteriorPanel(bpy.types.Panel):
             sublayout.prop(context.object.dif_props, "game_entity_gameclass")
 
 
+class ImportDIF(bpy.types.Operator, ImportHelper):
+    """Load a Torque DIF File"""
+
+    bl_idname = "import_scene.dif"
+    bl_label = "Import DIF"
+    bl_options = {"PRESET"}
+
+    filename_ext = ".dif"
+    filter_glob = StringProperty(
+        default="*.dif",
+        options={"HIDDEN"},
+    )
+
+    check_extension = True
+
+    def execute(self, context):
+        # print("Selected: " + context.active_object.name)
+        from . import import_dif
+
+        keywords = self.as_keywords(
+            ignore=(
+                "axis_forward",
+                "axis_up",
+                "filter_glob",
+            )
+        )
+
+        if bpy.data.is_saved and context.user_preferences.filepaths.use_relative_paths:
+            import os
+
+            keywords["relpath"] = os.path.dirname(bpy.data.filepath)
+
+        return import_dif.load(context, **keywords)
+
+    def draw(self, context):
+        pass
+
+
 class ExportDIF(bpy.types.Operator, ExportHelper):
     """Save a Torque DIF File"""
 
@@ -132,17 +172,22 @@ class ExportDIF(bpy.types.Operator, ExportHelper):
         return {"FINISHED"}
 
 
-classes = (ExportDIF,)
+classes = (ExportDIF, ImportDIF)
 
 
 def menu_func_export_dif(self, context):
     self.layout.operator(ExportDIF.bl_idname, text="Torque (.dif)")
 
 
+def menu_func_import_dif(self, context):
+    self.layout.operator(ImportDIF.bl_idname, text="Torque (.dif)")
+
+
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
     bpy.types.TOPBAR_MT_file_export.append(menu_func_export_dif)
+    bpy.types.TOPBAR_MT_file_import.append(menu_func_import_dif)
     bpy.utils.register_class(InteriorPanel)
     bpy.utils.register_class(InteriorSettings)
 
@@ -153,6 +198,7 @@ def unregister():
     for cls in classes:
         bpy.utils.unregister_class(cls)
     bpy.types.TOPBAR_MT_file_export.remove(menu_func_export_dif)
+    bpy.types.TOPBAR_MT_file_import.remove(menu_func_import_dif)
     bpy.utils.unregister_class(InteriorPanel)
     bpy.utils.unregister_class(InteriorSettings)
 
