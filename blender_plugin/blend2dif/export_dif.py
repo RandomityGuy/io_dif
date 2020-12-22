@@ -4,7 +4,7 @@ import ctypes
 import os
 from pathlib import Path
 
-from bpy.types import Curve, Mesh, Object
+from bpy.types import Curve, Material, Mesh, Object
 from bpy_extras.wm_utils.progress_report import ProgressReport, ProgressReportSubstep
 
 dllpath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "DifBuilderLib.dll")
@@ -130,11 +130,7 @@ def mesh_triangulate(me):
     bm.free()
 
 
-def resolve_texture(ob: Object):
-    if len(ob.material_slots) == 0:
-        return "NULL"
-
-    mat = ob.material_slots[0].material
+def resolve_texture(mat: Material):
     img = mat.node_tree.nodes.get("Image Texture", None)
     if img == None:
         return mat.name
@@ -197,7 +193,11 @@ def build_pathed_interior(ob: Object, marker_ob: Curve, offset, flip, double):
 
         n = mesh_verts[poly.vertices[0]].normal
 
-        material = resolve_texture(ob)
+        material = (
+            resolve_texture(mesh.materials[poly.material_index])
+            if poly.material_index != None
+            else "NULL"
+        )
 
         if not flip:
             difbuilder.add_triangle(p1, p2, p3, uv1, uv2, uv3, n, material)
@@ -288,7 +288,11 @@ def save(
 
             n = mesh_verts[poly.vertices[0]].normal
 
-            material = resolve_texture(obj)
+            material = (
+                resolve_texture(mesh.materials[poly.material_index])
+                if poly.material_index != None
+                else "NULL"
+            )
 
             if not flip:
                 difbuilder.add_triangle(p1, p2, p3, uv1, uv2, uv3, n, material)
