@@ -39,7 +39,7 @@ bl_info = {
     "author": "RandomityGuy",
     "description": "Dif import and export plguin for blender",
     "blender": (2, 80, 0),
-    "version": (1, 1, 0),
+    "version": (1, 1, 1),
     "location": "File > Import-Export",
     "warning": "",
     "category": "Import-Export",
