@@ -35,14 +35,14 @@ from bpy_extras.io_utils import (
 )
 
 bl_info = {
-    "name": "blend2dif",
+    "name": "io_dif",
     "author": "RandomityGuy",
-    "description": "Directly export Torque DIFs from blender using the obj2difplus engine",
+    "description": "Dif import and export plguin for blender",
     "blender": (2, 80, 0),
-    "version": (1, 0, 0),
-    "location": "",
+    "version": (1, 1, 0),
+    "location": "File > Import-Export",
     "warning": "",
-    "category": "Generic",
+    "category": "Import-Export",
 }
 
 
