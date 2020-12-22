@@ -10,6 +10,8 @@ set(CMAKE_CXX_FLAGS_DEBUG "/MTd /FS")
 set(SOURCE_FILES DifBuilderLib.cpp)
 add_library(DifBuilderLib SHARED ${SOURCE_FILES})
 
+set_target_properties(DifBuilder PROPERTIES COMPILE_FLAGS "/Od") # Disable optimizations cause it breaks
+set_target_properties(DifBuilderLib PROPERTIES COMPILE_FLAGS "/Od")
 include_directories(3rdparty/DifBuilder/include)
 include_directories(3rdparty/DifBuilder/3rdparty/)
 include_directories(3rdparty/DifBuilder/3rdparty/Dif)
