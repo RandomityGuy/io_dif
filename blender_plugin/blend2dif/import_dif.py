@@ -13,6 +13,7 @@ from bpy_extras.wm_utils.progress_report import ProgressReport, ProgressReportSu
 
 def create_material(filepath, matname):
     mat = bpy.data.materials.new(matname)
+    mat.use_nodes = True
 
     texname = resolve_texture(filepath, matname)
     if texname is not None:
@@ -22,10 +23,14 @@ def create_material(filepath, matname):
             teximg = None
             print("Cannot load image", texname)
 
-        texslot = mat.texture_slots.add()
-        texslot.use_map_alpha = True
-        texslot.texture = bpy.data.textures.new(texname, "IMAGE")
-        texslot.texture.image = teximg
+        texslot = mat.node_tree.nodes.new("ShaderNodeTexImage")
+        texslot.name = matname
+        texslot.image = teximg
+        mat.node_tree.nodes["Principled BSDF"].inputs["Specular"].default_value = 0
+        mat.node_tree.links.new(
+            mat.node_tree.nodes["Principled BSDF"].inputs["Base Color"],
+            texslot.outputs["Color"],
+        )
 
     return mat
 
@@ -58,15 +63,17 @@ def create_mesh(filepath, interior: Interior):
                 index1 = interior.windings[i + surface.windingStart + 1]
                 index2 = interior.windings[i + surface.windingStart + 2]
 
-            normal_index = interior.planes[surface.planeIndex].normalIndex
+            plane_flipped = (surface.planeIndex & 0x8000) == 0x8000
+            print(surface.planeIndex)
+            print(surface.planeIndex & ~0x8000)
+            normal_index = interior.planes[surface.planeIndex & ~0x8000].normalIndex
             tex_gen = interior.texGenEQs[surface.texGenIndex]
 
-            plane_flipped = (normal_index & 0x80000000) == 0x80000000
-            normal = interior.normals[normal_index & ~0x80000000]
+            normal = interior.normals[normal_index]
             if plane_flipped:
-                normal[0] *= -1
-                normal[1] *= -1
-                normal[2] *= -1
+                normal.x *= -1
+                normal.y *= -1
+                normal.z *= -1
 
             pt0 = interior.points[index0]
             pt1 = interior.points[index1]
