@@ -2,6 +2,7 @@ import array
 import os
 import time
 import bpy
+from bpy.types import Curve, Object
 import mathutils
 from .hxDif import *
 from bpy_extras.io_utils import unpack_list
@@ -175,61 +176,98 @@ def load(
         to be split into objects and then converted into mesh objects
     """
 
-    with ProgressReport(context.window_manager) as progress:
-        progress.enter_substeps(1, "Importing DIF %r..." % filepath)
+    dif = Dif.Load(str(filepath))
 
-        dif = Dif.Load(str(filepath))
+    if global_matrix is None:
+        global_matrix = mathutils.Matrix()
 
-        if global_matrix is None:
-            global_matrix = mathutils.Matrix()
+    # deselect all
+    if bpy.ops.object.select_all.poll():
+        bpy.ops.object.select_all(action="DESELECT")
 
-        # deselect all
-        if bpy.ops.object.select_all.poll():
-            bpy.ops.object.select_all(action="DESELECT")
+    scene = context.scene
+    new_objects = []  # put new objects here
 
-        scene = context.scene
-        new_objects = []  # put new objects here
+    for interior in dif.interiors:
+        new_objects.append(create_mesh(filepath, interior))
 
-        for interior in dif.interiors:
-            new_objects.append(create_mesh(filepath, interior))
+    pathedInteriors: list[Object] = []
+    for pathedInterior in dif.subObjects:
+        pathedInteriors.append(create_mesh(filepath, pathedInterior))
 
-        # Create new obj
+    # Create new obj
+    for obj in new_objects:
+        base = scene.collection.objects.link(obj)
+
+        # we could apply this anywhere before scaling.
+        obj.matrix_world = global_matrix
+
+    for mover in dif.interiorPathfollowers:
+        pos = mover.offset
+        itr = pathedInteriors[mover.interiorResIndex]
+        itr: Object = itr.copy()
+        base = scene.collection.objects.link(itr)
+        itr.location = [pos.x, pos.y, pos.z]
+        itr.dif_props.interior_type = "pathed_interior"
+
+        waypoints: list[WayPoint] = mover.wayPoint
+
+        markerpts = [
+            (waypt.position.x, waypt.position.y, waypt.position.z)
+            for waypt in waypoints
+        ]
+
+        curve = bpy.data.curves.new("markers", type="CURVE")
+        curve.dimensions = "3D"
+        spline = curve.splines.new(type="NURBS")
+        spline.points.add(len(markerpts) - 1)
+
+        for p, new_co in zip(spline.points, markerpts):
+            p.co = new_co + (1.0,)
+
+        path = bpy.data.objects.new("path", curve)
+        scene.collection.objects.link(path)
+
+        itr.dif_props.marker_path = curve
+
+    for ge in dif.gameEntities:
+        g: GameEntity = ge
+        gobj = bpy.data.objects.new(g.datablock, None)
+        gobj.location = (g.position.x, g.position.y, g.position.z)
+        gobj.dif_props.interior_type = "game_entity"
+        gobj.dif_props.game_entity_datablock = g.datablock
+        gobj.dif_props.game_entity_gameclass = g.gameClass
+        scene.collection.objects.link(gobj)
+
+    context.view_layer.update()
+
+    axis_min = [1000000000] * 3
+    axis_max = [-1000000000] * 3
+
+    if global_clamp_size:
+        # Get all object bounds
+        for ob in new_objects:
+            for v in ob.bound_box:
+                for axis, value in enumerate(v):
+                    if axis_min[axis] > value:
+                        axis_min[axis] = value
+                    if axis_max[axis] < value:
+                        axis_max[axis] = value
+
+        # Scale objects
+        max_axis = max(
+            axis_max[0] - axis_min[0],
+            axis_max[1] - axis_min[1],
+            axis_max[2] - axis_min[2],
+        )
+        scale = 1.0
+
+        while global_clamp_size < max_axis * scale:
+            scale = scale / 10.0
+
         for obj in new_objects:
-            base = scene.collection.objects.link(obj)
+            obj.scale = scale, scale, scale
 
-            # we could apply this anywhere before scaling.
-            obj.matrix_world = global_matrix
-
-        context.view_layer.update()
-
-        axis_min = [1000000000] * 3
-        axis_max = [-1000000000] * 3
-
-        if global_clamp_size:
-            # Get all object bounds
-            for ob in new_objects:
-                for v in ob.bound_box:
-                    for axis, value in enumerate(v):
-                        if axis_min[axis] > value:
-                            axis_min[axis] = value
-                        if axis_max[axis] < value:
-                            axis_max[axis] = value
-
-            # Scale objects
-            max_axis = max(
-                axis_max[0] - axis_min[0],
-                axis_max[1] - axis_min[1],
-                axis_max[2] - axis_min[2],
-            )
-            scale = 1.0
-
-            while global_clamp_size < max_axis * scale:
-                scale = scale / 10.0
-
-            for obj in new_objects:
-                obj.scale = scale, scale, scale
-
-        # progress.leave_substeps("Done.")
-        progress.leave_substeps("Finished importing: %r" % filepath)
+    # progress.leave_substeps("Done.")
 
     return {"FINISHED"}
