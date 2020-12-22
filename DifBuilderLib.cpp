@@ -84,6 +84,10 @@ extern "C"
 		g.datablock = std::string(datablock);
 		g.gameClass = std::string(gameClass);
 		g.position = glm::vec3(pos[0], pos[1], pos[2]);
+		g.properties = DIF::Dictionary();
+		g.properties.push_back(std::pair<std::string, std::string>(std::string("static"), std::string("1")));
+		g.properties.push_back(std::pair<std::string, std::string>(std::string("rotate"), std::string("1")));
+		dif->readGameEntities = 2;
 		dif->gameEntity.push_back(g);
 	}
 }
