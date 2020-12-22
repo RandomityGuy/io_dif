@@ -221,6 +221,8 @@ def load(
         curve.dimensions = "3D"
         spline = curve.splines.new(type="NURBS")
         spline.points.add(len(markerpts) - 1)
+        spline.order_u = 2
+        spline.resolution_u = 20
 
         for p, new_co in zip(spline.points, markerpts):
             p.co = new_co + (1.0,)
@@ -230,14 +232,15 @@ def load(
 
         itr.dif_props.marker_path = curve
 
-    for ge in dif.gameEntities:
-        g: GameEntity = ge
-        gobj = bpy.data.objects.new(g.datablock, None)
-        gobj.location = (g.position.x, g.position.y, g.position.z)
-        gobj.dif_props.interior_type = "game_entity"
-        gobj.dif_props.game_entity_datablock = g.datablock
-        gobj.dif_props.game_entity_gameclass = g.gameClass
-        scene.collection.objects.link(gobj)
+    if dif.gameEntities != None:
+        for ge in dif.gameEntities:
+            g: GameEntity = ge
+            gobj = bpy.data.objects.new(g.datablock, None)
+            gobj.location = (g.position.x, g.position.y, g.position.z)
+            gobj.dif_props.interior_type = "game_entity"
+            gobj.dif_props.game_entity_datablock = g.datablock
+            gobj.dif_props.game_entity_gameclass = g.gameClass
+            scene.collection.objects.link(gobj)
 
     context.view_layer.update()
 
