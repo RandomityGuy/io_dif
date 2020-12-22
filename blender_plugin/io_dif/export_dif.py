@@ -4,7 +4,7 @@ import ctypes
 import os
 from pathlib import Path
 
-from bpy.types import Curve, Material, Mesh, Object
+from bpy.types import Curve, Image, Material, Mesh, Object, ShaderNodeTexImage
 from bpy_extras.wm_utils.progress_report import ProgressReport, ProgressReportSubstep
 
 dllpath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "DifBuilderLib.dll")
@@ -131,11 +131,16 @@ def mesh_triangulate(me):
 
 
 def resolve_texture(mat: Material):
-    img = mat.node_tree.nodes.get("Image Texture", None)
+    img: ShaderNodeTexImage = None
+    for n in mat.node_tree.nodes:
+        if n.type == "TEX_IMAGE":
+            img = n
+            break
+
     if img == None:
         return mat.name
 
-    return img.image.name
+    return Path(img.image.filepath).stem
 
 
 def get_offset():
@@ -315,6 +320,9 @@ def save(
 
         dif_props = ob_eval.dif_props
 
+        if dif_props.interior_type == "game_entity":
+            game_entities.append(ob_eval)
+
         try:
             me = ob_eval.to_mesh()
         except RuntimeError:
@@ -326,9 +334,6 @@ def save(
 
         if dif_props.interior_type == "pathed_interior":
             mp_list.append((ob_eval, dif_props.marker_path))
-
-        if dif_props.interior_type == "game_entity":
-            game_entities.append(ob_eval)
 
     mp_difs = []
 
@@ -348,7 +353,7 @@ def save(
                     dif.add_game_entity(
                         ge.dif_props.game_entity_gameclass,
                         ge.dif_props.game_entity_datablock,
-                        ge.location,
+                        [ge.location[i] + off[i] for i in range(0, 3)],
                     )
 
             dif.write_dif(str(Path(filepath).with_suffix("")) + str(i) + ".dif")

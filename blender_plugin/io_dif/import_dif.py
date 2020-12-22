@@ -65,8 +65,6 @@ def create_mesh(filepath, interior: Interior):
                 index2 = interior.windings[i + surface.windingStart + 2]
 
             plane_flipped = (surface.planeIndex & 0x8000) == 0x8000
-            print(surface.planeIndex)
-            print(surface.planeIndex & ~0x8000)
             normal_index = interior.planes[surface.planeIndex & ~0x8000].normalIndex
             tex_gen = interior.texGenEQs[surface.texGenIndex]
 
@@ -131,7 +129,6 @@ def create_mesh(filepath, interior: Interior):
     uvs = me.uv_layers[0]
 
     for i, ((verts, material), poly) in enumerate(zip(faces, me.polygons)):
-        poly.use_smooth = True
         poly.loop_total = 3
         poly.loop_start = i * 3
 
