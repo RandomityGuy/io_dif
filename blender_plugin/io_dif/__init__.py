@@ -156,6 +156,12 @@ class ExportDIF(bpy.types.Operator, ExportHelper):
         max=16000,
     )
 
+    applymodifiers = BoolProperty(
+        name="Apply Modifiers",
+        description="Apply modifiers during export",
+        default=True,
+    )
+
     check_extension = True
 
     def execute(self, context):
@@ -163,11 +169,12 @@ class ExportDIF(bpy.types.Operator, ExportHelper):
 
         keywords = self.as_keywords(ignore=("check_existing", "filter_glob"))
         export_dif.save(
-            self,
+            context,
             keywords["filepath"],
             keywords.get("flip", False),
             keywords.get("double", False),
             keywords.get("maxpolys", 16000),
+            keywords.get("applymodifiers", True),
         )
         return {"FINISHED"}
 

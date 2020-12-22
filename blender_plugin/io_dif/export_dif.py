@@ -143,19 +143,19 @@ def resolve_texture(mat: Material):
     return Path(img.image.filepath).stem
 
 
-def get_offset():
+def get_offset(depsgraph, applymodifiers=True):
     obs = bpy.context.scene.objects
     minv = [1e9, 1e9, 1e9]
     maxv = [-1e9, -1e9, -1e9]
 
     for obj in obs:
-        ob_eval = obj
+        ob_eval = obj.evaluated_get(depsgraph) if applymodifiers else obj
         try:
             mesh = ob_eval.to_mesh()
         except RuntimeError:
             continue
 
-        mesh.transform(obj.matrix_world)
+        mesh.transform(ob_eval.matrix_world)
 
         for vert in mesh.vertices:
             for i in range(0, 3):
@@ -242,6 +242,7 @@ def save(
     flip=False,
     double=False,
     maxtricount=16000,
+    applymodifiers=True,
 ):
     import bpy
     import bmesh
@@ -252,7 +253,9 @@ def save(
 
     difbuilder = builders[0]
 
-    off = get_offset()
+    depsgraph = context.evaluated_depsgraph_get()
+
+    off = get_offset(depsgraph, applymodifiers)
 
     tris = 0
 
@@ -316,7 +319,7 @@ def save(
     game_entities: list[Object] = []
 
     for ob in obs:
-        ob_eval = ob
+        ob_eval = ob.evaluated_get(depsgraph) if applymodifiers else ob
 
         dif_props = ob_eval.dif_props
 
@@ -329,8 +332,8 @@ def save(
             continue
 
         if dif_props.interior_type == "static_interior":
-            me.transform(ob.matrix_world)
-            save_mesh(ob, me, off, flip, double)
+            me.transform(ob_eval.matrix_world)
+            save_mesh(ob_eval, me, off, flip, double)
 
         if dif_props.interior_type == "pathed_interior":
             mp_list.append((ob_eval, dif_props.marker_path))
