@@ -35,7 +35,7 @@ from bpy_extras.io_utils import (
 )
 
 bl_info = {
-    "name": "io_dif",
+    "name": "Torque DIF",
     "author": "RandomityGuy",
     "description": "Dif import and export plguin for blender",
     "blender": (2, 80, 0),
