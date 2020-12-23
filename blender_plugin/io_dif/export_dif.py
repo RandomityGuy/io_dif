@@ -156,6 +156,7 @@ class DifBuilder:
     def add_pathed_interior(self, dif: Dif, markerlist: MarkerList):
         difbuilderlib.add_pathed_interior(self.__ptr__, dif.__ptr__, markerlist.__ptr__)
 
+    # NONFUNCTIONAL, TRIGGERS ARENT GETTING CREATED WHEN PRESSING CREATE SUBS
     def add_trigger(self, datablock, name, position, scale, props: DIFDict):
         posarr = (ctypes.c_float * len(position))(*position)
         props.add_kvp("scale", f"{scale[0]} {scale[1]} {scale[2]}")
@@ -416,9 +417,6 @@ def save(
             if i == 0:
                 for (mpdif, markerlist) in mp_difs:
                     builders[i].add_pathed_interior(mpdif, markerlist)
-                # builders[i].add_trigger(
-                #     "DefaultTrigger", "Trigger", (0, 0, 0), (1, 1, 1), DIFDict()
-                # )
 
             dif = builders[i].build()
 

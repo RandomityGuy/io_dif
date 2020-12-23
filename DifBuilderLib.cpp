@@ -65,7 +65,9 @@ extern "C"
 	{
 		std::ofstream outStr;
 		outStr.open(path, std::ios::out | std::ios::binary);
-		dif->write(outStr, DIF::Version());
+		DIF::Version ver;
+		ver.dif.type = DIF::Version::DIFVersion::MBG;
+		dif->write(outStr, ver);
 	}
 
 	std::vector<DIF::DIFBuilder::Marker> *new_marker_list()
