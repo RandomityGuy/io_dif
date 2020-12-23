@@ -8,14 +8,14 @@ Blender plugin to import and export Torque DIF interiors.
 
 - Powered by [hxDIF](https://github.com/RandomityGuy/hxDIF)
 - Supports PathedInteriors and its path
-- Supports embedded GameEntities
+- Supports embedded GameEntities with properties
 - Supports loading textures
 
 ### Export DIF
 
 - Powered by [DifBuilder](https://github.com/RandomityGuy/DifBuilder)
 - Export support for PathedInteriors and Markers
-- Export support for GameEntities
+- Export support for GameEntities and its properties
 - Additional export parameters provided by [obj2difPlus](https://github.com/RandomityGuy/obj2difPlus)
 
 ## Installation
@@ -51,6 +51,11 @@ Located in the object properties panel
   - Game Entity: represents an entity in the dif such as items
     - Game Class: the class of the entity such as "Item", "StaticShape",etc
     - Datablock: the datablock of the item.
+    - Properties: a list of additional key value pairs which will be set to the object on Create Subs
+
+## Preview
+
+![Imgur](https://imgur.com/OkSM6lY.png)
 
 ## Build
 
