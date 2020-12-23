@@ -53,9 +53,11 @@ Located in the object properties panel
     - Datablock: the datablock of the item.
     - Properties: a list of additional key value pairs which will be set to the object on Create Subs
 
-## Preview
+## Previews
 
 ![Imgur](https://imgur.com/OkSM6lY.png)
+
+![Imgur](https://imgur.com/3NC5JmH.png)
 
 ## Build
 
