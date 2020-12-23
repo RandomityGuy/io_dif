@@ -2,6 +2,7 @@ import array
 import os
 import time
 import bpy
+from bpy.props import CollectionProperty
 from bpy.types import Curve, Object
 import mathutils
 from .hxDif import *
@@ -237,6 +238,10 @@ def load(
             gobj.dif_props.interior_type = "game_entity"
             gobj.dif_props.game_entity_datablock = g.datablock
             gobj.dif_props.game_entity_gameclass = g.gameClass
+            for key in g.properties.h:
+                prop = gobj.dif_props.game_entity_properties.add()
+                prop.key = key
+                prop.value = g.properties.get(key)
             scene.collection.objects.link(gobj)
 
     context.view_layer.update()

@@ -46,6 +46,35 @@ bl_info = {
 }
 
 
+class InteriorKVP(bpy.types.PropertyGroup):
+    key = StringProperty(name="")
+    value = StringProperty(name="")
+
+
+class AddCustomProperty(bpy.types.Operator):
+    bl_idname = "dif.add_prop"
+    bl_label = "Add Property"
+
+    def execute(self, context):
+        dif_props: InteriorSettings = context.object.dif_props
+        prop = dif_props.game_entity_properties.add()
+        prop.key = "Key"
+        prop.value = "Value"
+        return {"FINISHED"}
+
+
+class DeleteCustomProperty(bpy.types.Operator):
+    bl_idname = "dif.delete_prop"
+    bl_label = "Delete Property"
+
+    delete_id = IntProperty()
+
+    def execute(self, context):
+        dif_props: InteriorSettings = context.object.dif_props
+        prop = dif_props.game_entity_properties.remove(self.delete_id)
+        return {"FINISHED"}
+
+
 class InteriorSettings(bpy.types.PropertyGroup):
     interior_type = EnumProperty(
         name="Interior Entity Type",
@@ -60,6 +89,9 @@ class InteriorSettings(bpy.types.PropertyGroup):
     marker_path = PointerProperty(type=bpy.types.Curve, name="Marker Path")
     game_entity_datablock = StringProperty(name="Datablock")
     game_entity_gameclass = StringProperty(name="Game Class")
+    game_entity_properties = CollectionProperty(
+        type=InteriorKVP, name="Custom Properties"
+    )
 
 
 class InteriorPanel(bpy.types.Panel):
@@ -83,6 +115,23 @@ class InteriorPanel(bpy.types.Panel):
             sublayout.prop(context.object.dif_props, "game_entity_datablock")
             sublayout = layout.row()
             sublayout.prop(context.object.dif_props, "game_entity_gameclass")
+            sublayout = layout.row()
+            sublayout.label(text="Properties")
+            sublayout = layout.row()
+            sublayout.operator(AddCustomProperty.bl_idname, text="Add Property")
+            for i, custom_property in enumerate(
+                context.object.dif_props.game_entity_properties
+            ):
+                sublayout = layout.row()
+                sublayout.prop(
+                    context.object.dif_props.game_entity_properties[i], "key"
+                )
+                sublayout.prop(
+                    context.object.dif_props.game_entity_properties[i], "value"
+                )
+                sublayout.operator(
+                    DeleteCustomProperty.bl_idname, text="X"
+                ).delete_id = i
 
 
 class ImportDIF(bpy.types.Operator, ImportHelper):
@@ -196,6 +245,9 @@ def register():
     bpy.types.TOPBAR_MT_file_export.append(menu_func_export_dif)
     bpy.types.TOPBAR_MT_file_import.append(menu_func_import_dif)
     bpy.utils.register_class(InteriorPanel)
+    bpy.utils.register_class(AddCustomProperty)
+    bpy.utils.register_class(DeleteCustomProperty)
+    bpy.utils.register_class(InteriorKVP)
     bpy.utils.register_class(InteriorSettings)
 
     bpy.types.Object.dif_props = PointerProperty(type=InteriorSettings)
@@ -207,6 +259,9 @@ def unregister():
     bpy.types.TOPBAR_MT_file_export.remove(menu_func_export_dif)
     bpy.types.TOPBAR_MT_file_import.remove(menu_func_import_dif)
     bpy.utils.unregister_class(InteriorPanel)
+    bpy.utils.unregister_class(AddCustomProperty)
+    bpy.utils.unregister_class(DeleteCustomProperty)
+    bpy.utils.unregister_class(InteriorKVP)
     bpy.utils.unregister_class(InteriorSettings)
 
     del bpy.types.Object.dif_props

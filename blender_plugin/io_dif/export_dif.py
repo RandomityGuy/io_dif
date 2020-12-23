@@ -1,4 +1,5 @@
 from os.path import join
+from typing import Dict
 import bpy
 import ctypes
 import os
@@ -48,7 +49,16 @@ difbuilderlib.add_game_entity.argtypes = [
     ctypes.c_char_p,
     ctypes.c_char_p,
     ctypes.POINTER(ctypes.c_float),
+    ctypes.c_void_p,
 ]
+difbuilderlib.new_dict.restype = ctypes.c_void_p
+difbuilderlib.dispose_dict.argtypes = [ctypes.c_void_p]
+difbuilderlib.add_dict_kvp.argtypes = [
+    ctypes.c_void_p,
+    ctypes.c_char_p,
+    ctypes.c_char_p,
+]
+
 
 scene = bpy.context.scene
 
@@ -67,6 +77,21 @@ class MarkerList:
         difbuilderlib.push_marker(self.__ptr__, vecarr, msToNext, initialPathPosition)
 
 
+class DIFDict:
+    def __init__(self):
+        self.__ptr__ = difbuilderlib.new_dict()
+
+    def __del__(self):
+        difbuilderlib.dispose_dict(self.__ptr__)
+
+    def add_kvp(self, key, value):
+        difbuilderlib.add_dict_kvp(
+            self.__ptr__,
+            ctypes.create_string_buffer(key.encode("ascii")),
+            ctypes.create_string_buffer(value.encode("ascii")),
+        )
+
+
 class Dif:
     def __init__(self, ptr):
         self.__ptr__ = ptr
@@ -79,13 +104,17 @@ class Dif:
             self.__ptr__, ctypes.create_string_buffer(path.encode("ascii"))
         )
 
-    def add_game_entity(self, gameClass, datablock, position):
+    def add_game_entity(self, gameClass, datablock, position, properties: dict):
         vecarr = (ctypes.c_float * len(position))(*position)
+        propertydict = DIFDict()
+        for key in properties:
+            propertydict.add_kvp(key, properties[key])
         difbuilderlib.add_game_entity(
             self.__ptr__,
             ctypes.create_string_buffer(gameClass.encode("ascii")),
             ctypes.create_string_buffer(datablock.encode("ascii")),
             vecarr,
+            propertydict.__ptr__,
         )
 
 
@@ -233,7 +262,10 @@ def build_pathed_interior(ob: Object, marker_ob: Curve, offset, flip, double):
 
 def build_game_entity(ob: Object):
     props = ob.dif_props
-    return (props.game_entity_datablock, props.game_entity_gameclass)
+    propertydict = {}
+    for prop in props.game_entity_properties:
+        propertydict[prop.key] = prop.value
+    return (props.game_entity_datablock, props.game_entity_gameclass, propertydict)
 
 
 def save(
@@ -353,10 +385,12 @@ def save(
 
             if i == 0:
                 for ge in game_entities:
+                    entity = build_game_entity(ge)
                     dif.add_game_entity(
-                        ge.dif_props.game_entity_gameclass,
-                        ge.dif_props.game_entity_datablock,
+                        entity[0],
+                        entity[1],
                         [ge.location[i] + off[i] for i in range(0, 3)],
+                        entity[2],
                     )
 
             dif.write_dif(str(Path(filepath).with_suffix("")) + str(i) + ".dif")
