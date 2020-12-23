@@ -39,7 +39,7 @@ bl_info = {
     "author": "RandomityGuy",
     "description": "Dif import and export plguin for blender",
     "blender": (2, 80, 0),
-    "version": (1, 1, 2),
+    "version": (1, 1, 3),
     "location": "File > Import-Export",
     "warning": "",
     "category": "Import-Export",
@@ -116,7 +116,7 @@ class InteriorPanel(bpy.types.Panel):
             sublayout = layout.row()
             sublayout.prop(context.object.dif_props, "game_entity_gameclass")
             sublayout = layout.row()
-            sublayout.label(text="Properties")
+            sublayout.label(text="Properties:")
             sublayout = layout.row()
             sublayout.operator(AddCustomProperty.bl_idname, text="Add Property")
             for i, custom_property in enumerate(
@@ -130,7 +130,7 @@ class InteriorPanel(bpy.types.Panel):
                     context.object.dif_props.game_entity_properties[i], "value"
                 )
                 sublayout.operator(
-                    DeleteCustomProperty.bl_idname, text="X"
+                    DeleteCustomProperty.bl_idname, icon="X", text=""
                 ).delete_id = i
 
 
