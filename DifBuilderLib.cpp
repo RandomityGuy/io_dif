@@ -78,16 +78,31 @@ extern "C"
 		markerlist->push_back(m);
 	}
 
-	void add_game_entity(DIF::DIF *dif, char *gameClass, char *datablock, float *pos)
+	void add_game_entity(DIF::DIF *dif, char *gameClass, char *datablock, float *pos, DIF::Dictionary* dict)
 	{
 		DIF::GameEntity g;
 		g.datablock = std::string(datablock);
 		g.gameClass = std::string(gameClass);
 		g.position = glm::vec3(pos[0], pos[1], pos[2]);
-		g.properties = DIF::Dictionary();
+		g.properties = DIF::Dictionary(*dict);
 		g.properties.push_back(std::pair<std::string, std::string>(std::string("static"), std::string("1")));
 		g.properties.push_back(std::pair<std::string, std::string>(std::string("rotate"), std::string("1")));
 		dif->readGameEntities = 2;
 		dif->gameEntity.push_back(g);
+	}
+
+	DIF::Dictionary* new_dict()
+	{
+		return new DIF::Dictionary();
+	}
+
+	void dispose_dict(DIF::Dictionary* dict)
+	{
+		delete dict;
+	}
+
+	void add_dict_kvp(DIF::Dictionary* dict, char* key, char* value)
+	{
+		dict->push_back(std::pair<std::string, std::string>(std::string(key), std::string(value)));
 	}
 }

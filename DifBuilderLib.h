@@ -29,5 +29,11 @@ extern "C"
 
 	PLUGIN_API void push_marker(std::vector<DIF::Marker> *markerlist, float *pos, int msToNext, int initialTargetPosition);
 
-	PLUGIN_API void add_game_entity(DIF::DIF *dif, char *gameClass, char *datablock, float *pos);
+	PLUGIN_API void add_game_entity(DIF::DIF *dif, char *gameClass, char *datablock, float *pos, DIF::Dictionary* dict);
+
+	PLUGIN_API DIF::Dictionary* new_dict();
+
+	PLUGIN_API void dispose_dict(DIF::Dictionary* dict);
+
+	PLUGIN_API void add_dict_kvp(DIF::Dictionary* dict, char* key, char* value);
 }
