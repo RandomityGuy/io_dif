@@ -53,6 +53,14 @@ Located in the object properties panel
     - Datablock: the datablock of the item.
     - Properties: a list of additional key value pairs which will be set to the object on Create Subs
 
+## Limitations
+
+- Sometimes difs are broken. To fix them, theres a few methods:
+  - Split the object file either manually or use the "Polygons per DIF" option in Export DIF
+  - Move the object somewhere else
+- No Trigger support: I tried but Torque was being Torque even when I successfully embedded them into difs.
+- No Game Entity rotation support: there isnt even a rotation field for Game Entities in difs, and torque doesnt even use the rotation field explicitly passed as a property
+
 ## Previews
 
 ![Imgur](https://imgur.com/OkSM6lY.png)
