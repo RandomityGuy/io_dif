@@ -7,6 +7,7 @@ from pathlib import Path
 
 from bpy.types import Curve, Image, Material, Mesh, Object, ShaderNodeTexImage
 from bpy_extras.wm_utils.progress_report import ProgressReport, ProgressReportSubstep
+from mathutils import Quaternion, Vector
 
 dllpath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "DifBuilderLib.dll")
 difbuilderlib = ctypes.CDLL(dllpath)
@@ -58,6 +59,13 @@ difbuilderlib.add_dict_kvp.argtypes = [
     ctypes.c_char_p,
     ctypes.c_char_p,
 ]
+difbuilderlib.add_trigger.argtypes = [
+    ctypes.c_void_p,
+    ctypes.POINTER(ctypes.c_float),
+    ctypes.c_char_p,
+    ctypes.c_char_p,
+    ctypes.c_void_p,
+]
 
 
 scene = bpy.context.scene
@@ -104,11 +112,14 @@ class Dif:
             self.__ptr__, ctypes.create_string_buffer(path.encode("ascii"))
         )
 
-    def add_game_entity(self, gameClass, datablock, position, properties: dict):
+    def add_game_entity(self, gameClass, datablock, position, scale, properties: dict):
         vecarr = (ctypes.c_float * len(position))(*position)
         propertydict = DIFDict()
         for key in properties:
             propertydict.add_kvp(key, properties[key])
+        propertydict.add_kvp("scale", "%.5f %.5f %.5f" % (scale[0], scale[1], scale[2]))
+        if gameClass == "Trigger":
+            propertydict.add_kvp("polyhedron", "0 0 0 1 0 0 0 -1 0 0 0 1")
         difbuilderlib.add_game_entity(
             self.__ptr__,
             ctypes.create_string_buffer(gameClass.encode("ascii")),
@@ -144,6 +155,17 @@ class DifBuilder:
 
     def add_pathed_interior(self, dif: Dif, markerlist: MarkerList):
         difbuilderlib.add_pathed_interior(self.__ptr__, dif.__ptr__, markerlist.__ptr__)
+
+    def add_trigger(self, datablock, name, position, scale, props: DIFDict):
+        posarr = (ctypes.c_float * len(position))(*position)
+        props.add_kvp("scale", f"{scale[0]} {scale[1]} {scale[2]}")
+        difbuilderlib.add_trigger(
+            self.__ptr__,
+            posarr,
+            ctypes.create_string_buffer(name.encode("ascii")),
+            ctypes.create_string_buffer(datablock.encode("ascii")),
+            props.__ptr__,
+        )
 
     def build(self):
         return Dif(difbuilderlib.build(self.__ptr__))
@@ -265,7 +287,21 @@ def build_game_entity(ob: Object):
     propertydict = {}
     for prop in props.game_entity_properties:
         propertydict[prop.key] = prop.value
-    return (props.game_entity_datablock, props.game_entity_gameclass, propertydict)
+
+    axis_ang_raw: Vector = ob.matrix_world.to_quaternion().to_axis_angle()
+    axis_ang = (
+        axis_ang_raw[1],
+        axis_ang_raw[0][0],
+        axis_ang_raw[0][1],
+        axis_ang_raw[0][2],
+    )
+
+    return (
+        props.game_entity_datablock,
+        props.game_entity_gameclass,
+        propertydict,
+        ob.scale,
+    )
 
 
 def save(
@@ -380,6 +416,9 @@ def save(
             if i == 0:
                 for (mpdif, markerlist) in mp_difs:
                     builders[i].add_pathed_interior(mpdif, markerlist)
+                # builders[i].add_trigger(
+                #     "DefaultTrigger", "Trigger", (0, 0, 0), (1, 1, 1), DIFDict()
+                # )
 
             dif = builders[i].build()
 
@@ -387,9 +426,10 @@ def save(
                 for ge in game_entities:
                     entity = build_game_entity(ge)
                     dif.add_game_entity(
-                        entity[0],
                         entity[1],
+                        entity[0],
                         [ge.location[i] + off[i] for i in range(0, 3)],
+                        entity[3],
                         entity[2],
                     )
 

@@ -19,21 +19,23 @@ extern "C"
 
 	PLUGIN_API DIF::DIF *build(DIF::DIFBuilder *difbuilder);
 
-	PLUGIN_API void add_pathed_interior(DIF::DIFBuilder *difbuilder, DIF::DIF *difptr, std::vector<DIF::Marker> *markerlist);
+	PLUGIN_API void add_pathed_interior(DIF::DIFBuilder *difbuilder, DIF::DIF *difptr, std::vector<DIF::DIFBuilder::Marker> *markerlist);
 
 	PLUGIN_API void write_dif(DIF::DIF *dif, char *path);
 
-	PLUGIN_API std::vector<DIF::Marker> *new_marker_list();
+	PLUGIN_API std::vector<DIF::DIFBuilder::Marker> *new_marker_list();
 
-	PLUGIN_API void dispose_marker_list(std::vector<DIF::Marker> *markerlist);
+	PLUGIN_API void dispose_marker_list(std::vector<DIF::DIFBuilder::Marker> *markerlist);
 
-	PLUGIN_API void push_marker(std::vector<DIF::Marker> *markerlist, float *pos, int msToNext, int initialTargetPosition);
+	PLUGIN_API void push_marker(std::vector<DIF::DIFBuilder::Marker> *markerlist, float *pos, int msToNext, int initialTargetPosition);
 
-	PLUGIN_API void add_game_entity(DIF::DIF *dif, char *gameClass, char *datablock, float *pos, DIF::Dictionary* dict);
+	PLUGIN_API void add_game_entity(DIF::DIF *dif, char *gameClass, char *datablock, float *pos, DIF::Dictionary *dict);
 
-	PLUGIN_API DIF::Dictionary* new_dict();
+	PLUGIN_API void add_trigger(DIF::DIFBuilder *difbuilder, float *position, char *name, char *datablock, DIF::Dictionary *props);
 
-	PLUGIN_API void dispose_dict(DIF::Dictionary* dict);
+	PLUGIN_API DIF::Dictionary *new_dict();
 
-	PLUGIN_API void add_dict_kvp(DIF::Dictionary* dict, char* key, char* value);
+	PLUGIN_API void dispose_dict(DIF::Dictionary *dict);
+
+	PLUGIN_API void add_dict_kvp(DIF::Dictionary *dict, char *key, char *value);
 }
