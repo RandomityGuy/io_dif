@@ -14,6 +14,8 @@ from bpy_extras.wm_utils.progress_report import ProgressReport, ProgressReportSu
 
 
 def create_material(filepath, matname):
+    if "/" in matname:
+        matname = matname.split("/")[1]
     mat = bpy.data.materials.new(matname)
     mat.use_nodes = True
 
