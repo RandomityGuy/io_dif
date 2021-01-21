@@ -10,7 +10,13 @@ from bpy_extras.wm_utils.progress_report import ProgressReport, ProgressReportSu
 from mathutils import Quaternion, Vector
 
 dllpath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "DifBuilderLib.dll")
-difbuilderlib = ctypes.CDLL(dllpath)
+difbuilderlib = None
+try:
+    difbuilderlib = ctypes.CDLL(dllpath)
+except:
+    raise Exception(
+        "There was an error loading the necessary dll required for dif export. Please download the plugin from the proper location: https://github.com/RandomityGuy/io_dif/releases"
+    )
 
 difbuilderlib.new_difbuilder.restype = ctypes.c_void_p
 difbuilderlib.dispose_difbuilder.argtypes = [ctypes.c_void_p]
@@ -312,11 +318,13 @@ def save(
     double=False,
     maxtricount=16000,
     applymodifiers=True,
+    exportvisible=True,
+    exportselected=False,
 ):
     import bpy
     import bmesh
 
-    obs = bpy.context.scene.objects
+    obs = bpy.context.selected_objects if exportselected else bpy.context.scene.objects
 
     builders = [DifBuilder()]
 
@@ -388,6 +396,10 @@ def save(
     game_entities: list[Object] = []
 
     for ob in obs:
+        if exportvisible:
+            if not ob.visible_get():
+                continue
+
         ob_eval = ob.evaluated_get(depsgraph) if applymodifiers else ob
 
         dif_props = ob_eval.dif_props

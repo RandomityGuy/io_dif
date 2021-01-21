@@ -19,6 +19,7 @@ if "bpy" in locals():
     if "import_dif" in locals():
         importlib.reload(import_dif)
 
+import os
 import bpy
 from bpy.props import (
     BoolProperty,
@@ -39,7 +40,7 @@ bl_info = {
     "author": "RandomityGuy",
     "description": "Dif import and export plguin for blender",
     "blender": (2, 80, 0),
-    "version": (1, 1, 3),
+    "version": (1, 1, 4),
     "location": "File > Import-Export",
     "warning": "",
     "category": "Import-Export",
@@ -211,6 +212,18 @@ class ExportDIF(bpy.types.Operator, ExportHelper):
         default=True,
     )
 
+    exportvisible = BoolProperty(
+        name="Export Visible",
+        description="Export only visible geometry",
+        default=True,
+    )
+
+    exportselected = BoolProperty(
+        name="Export Selected",
+        description="Export only selected geometry",
+        default=False,
+    )
+
     check_extension = True
 
     def execute(self, context):
@@ -224,6 +237,8 @@ class ExportDIF(bpy.types.Operator, ExportHelper):
             keywords.get("double", False),
             keywords.get("maxpolys", 16000),
             keywords.get("applymodifiers", True),
+            keywords.get("exportvisible", True),
+            keywords.get("exportselected", False),
         )
         return {"FINISHED"}
 
@@ -249,6 +264,14 @@ def register():
     bpy.utils.register_class(DeleteCustomProperty)
     bpy.utils.register_class(InteriorKVP)
     bpy.utils.register_class(InteriorSettings)
+
+    dllpath = os.path.join(
+        os.path.dirname(os.path.realpath(__file__)), "DifBuilderLib.dll"
+    )
+    if not os.path.isfile(dllpath):
+        raise Exception(
+            "There was an error loading the necessary dll required for dif export. Please download the plugin from the proper location: https://github.com/RandomityGuy/io_dif/releases"
+        )
 
     bpy.types.Object.dif_props = PointerProperty(type=InteriorSettings)
 
