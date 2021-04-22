@@ -933,16 +933,16 @@ class Interior:
         pos = io.tell()
         try:
             def _hx_local_15(io):
-                return Surface.read(io,version)
+                return Surface.read(io,version,it)
             it.surfaces = ReaderExtensions.readArray(io,_hx_local_15)
             if (version.interiorType == "?"):
                 version.interiorType = "tge"
         except BaseException as _g:
-            if (version.interiorType == "?"):
-                version.interiorType = "mbg"
+            if (version.interiorType == "tgea"):
+                version.interiorType = "tge"
             io.seek(pos)
             def _hx_local_16(io):
-                return Surface.read(io,version)
+                return Surface.read(io,version,it)
             try:
                 it.surfaces = ReaderExtensions.readArray(io,_hx_local_16)
             except BaseException as _g:
@@ -1643,16 +1643,28 @@ class Surface:
                 io.writeInt32(self.brushId)
 
     @staticmethod
-    def read(io,version):
+    def read(io,version,interior):
         ret = Surface()
         ret.windingStart = io.readInt32()
+        if (len(interior.windings) <= ret.windingStart):
+            raise haxe_Exception("DIF Type Error")
         if (version.interiorVersion >= 13):
             ret.windingCount = io.readInt32()
         else:
             ret.windingCount = io.readByte()
+        if ((ret.windingStart + ret.windingCount) > len(interior.windings)):
+            raise haxe_Exception("DIF Type Error")
         ret.planeIndex = io.readInt16()
+        flipped = ((ret.planeIndex >> 15) != 0)
+        planeIndexTemp = (ret.planeIndex & -32769)
+        if (((planeIndexTemp & -32769)) >= len(interior.planes)):
+            raise haxe_Exception("DIF Type Error")
         ret.textureIndex = io.readInt16()
+        if (ret.textureIndex >= len(interior.materialList)):
+            raise haxe_Exception("DIF Type Error")
         ret.texGenIndex = io.readInt32()
+        if (ret.texGenIndex >= len(interior.texGenEQs)):
+            raise haxe_Exception("DIF Type Error")
         ret.surfaceFlags = io.readByte()
         ret.fanMask = io.readInt32()
         ret.lightMapFinalWord = io.readInt16()
@@ -2094,7 +2106,7 @@ class haxe_Exception(Exception):
     _hx_class_name = "haxe.Exception"
     __slots__ = ("_hx___nativeStack", "_hx___skipStack", "_hx___nativeException", "_hx___previousException")
     _hx_fields = ["__nativeStack", "__skipStack", "__nativeException", "__previousException"]
-    _hx_methods = ["unwrap", "get_native"]
+    _hx_methods = ["unwrap", "toString", "get_message", "get_native"]
     _hx_statics = ["caught", "thrown"]
     _hx_interfaces = []
     _hx_super = Exception
@@ -2120,6 +2132,12 @@ class haxe_Exception(Exception):
 
     def unwrap(self):
         return self._hx___nativeException
+
+    def toString(self):
+        return self.get_message()
+
+    def get_message(self):
+        return str(self)
 
     def get_native(self):
         return self._hx___nativeException
