@@ -209,8 +209,8 @@ class Class: pass
 
 class ConvexHull:
     _hx_class_name = "ConvexHull"
-    __slots__ = ("hullStart", "hullCount", "minX", "minY", "minZ", "maxX", "maxY", "maxZ", "surfaceStart", "surfaceCount", "planeStart", "polyListPlaneStart", "polyListPointStart", "polyListStringStart")
-    _hx_fields = ["hullStart", "hullCount", "minX", "minY", "minZ", "maxX", "maxY", "maxZ", "surfaceStart", "surfaceCount", "planeStart", "polyListPlaneStart", "polyListPointStart", "polyListStringStart"]
+    __slots__ = ("hullStart", "hullCount", "minX", "minY", "minZ", "maxX", "maxY", "maxZ", "surfaceStart", "surfaceCount", "planeStart", "polyListPlaneStart", "polyListPointStart", "polyListStringStart", "staticMesh")
+    _hx_fields = ["hullStart", "hullCount", "minX", "minY", "minZ", "maxX", "maxY", "maxZ", "surfaceStart", "surfaceCount", "planeStart", "polyListPlaneStart", "polyListPointStart", "polyListStringStart", "staticMesh"]
     _hx_methods = ["write"]
     _hx_statics = ["read"]
 
@@ -229,8 +229,9 @@ class ConvexHull:
         self.polyListPlaneStart = 0
         self.polyListPointStart = 0
         self.polyListStringStart = 0
+        self.staticMesh = False
 
-    def write(self,io):
+    def write(self,io,version):
         io.writeInt32(self.hullStart)
         io.writeUInt16(self.hullCount)
         io.writeFloat(self.minX)
@@ -245,9 +246,11 @@ class ConvexHull:
         io.writeInt32(self.polyListPlaneStart)
         io.writeInt32(self.polyListPointStart)
         io.writeInt32(self.polyListStringStart)
+        if (version.interiorVersion >= 12):
+            io.writeByte((1 if (self.staticMesh) else 0))
 
     @staticmethod
-    def read(io):
+    def read(io,version):
         ret = ConvexHull()
         ret.hullStart = io.readInt32()
         ret.hullCount = io.readUInt16()
@@ -263,6 +266,8 @@ class ConvexHull:
         ret.polyListPlaneStart = io.readInt32()
         ret.polyListPointStart = io.readInt32()
         ret.polyListStringStart = io.readInt32()
+        if (version.interiorVersion >= 12):
+            ret.staticMesh = (io.readByte() > 0)
         return ret
 
 
@@ -296,7 +301,7 @@ class Dif:
     __slots__ = ("difVersion", "previewIncluded", "interiors", "subObjects", "triggers", "interiorPathfollowers", "forceFields", "aiSpecialNodes", "vehicleCollision", "gameEntities")
     _hx_fields = ["difVersion", "previewIncluded", "interiors", "subObjects", "triggers", "interiorPathfollowers", "forceFields", "aiSpecialNodes", "vehicleCollision", "gameEntities"]
     _hx_methods = ["write"]
-    _hx_statics = ["Load", "Save", "LoadFromBuffer", "SaveToBuffer", "read"]
+    _hx_statics = ["Load", "Save", "LoadFromBuffer", "SaveToBuffer", "LoadFromByteArray", "SaveToByteArray", "read"]
 
     def __init__(self):
         self.aiSpecialNodes = None
@@ -333,7 +338,7 @@ class Dif:
         WriterExtensions.writeArray(io,self.aiSpecialNodes,_hx_local_5)
         if (self.vehicleCollision is not None):
             io.writeInt32(1)
-            self.vehicleCollision.write(io)
+            self.vehicleCollision.write(io,version)
         else:
             io.writeInt32(0)
         if (self.gameEntities is not None):
@@ -371,6 +376,17 @@ class Dif:
         return bw.getBuffer()
 
     @staticmethod
+    def LoadFromByteArray(buffer):
+        br = io_BytesReader(haxe_io_Bytes.ofData(buffer))
+        return Dif.read(br)
+
+    @staticmethod
+    def SaveToByteArray(dif,version):
+        bw = io_BytesWriter()
+        dif.write(bw,version)
+        return bw.getBuffer().b
+
+    @staticmethod
     def read(io):
         ret = Dif()
         version = Version()
@@ -389,7 +405,7 @@ class Dif:
         ret.aiSpecialNodes = ReaderExtensions.readArray(io,AISpecialNode.read)
         readVehicleCollision = io.readInt32()
         if (readVehicleCollision == 1):
-            ret.vehicleCollision = VehicleCollision.read(io)
+            ret.vehicleCollision = VehicleCollision.read(io,version)
         readGameEntities = io.readInt32()
         if (readGameEntities == 2):
             ret.gameEntities = ReaderExtensions.readArray(io,GameEntity.read)
@@ -791,7 +807,7 @@ class Interior:
             WriterExtensions.writeArray(io,self.nameBuffer,_hx_local_32)
             io.writeInt32(self.numSubObjects)
         def _hx_local_33(io,p):
-            p.write(io)
+            p.write(io,version)
         WriterExtensions.writeArray(io,self.convexHulls,_hx_local_33)
         def _hx_local_34(io,p):
             io.writeByte(p)
@@ -1001,55 +1017,57 @@ class Interior:
             it.nameBuffer = ReaderExtensions.readArray(io,_hx_local_32)
             it.stateDataFlags = 0
             it.numSubObjects = io.readInt32()
-        it.convexHulls = ReaderExtensions.readArray(io,ConvexHull.read)
         def _hx_local_33(io):
+            return ConvexHull.read(io,version)
+        it.convexHulls = ReaderExtensions.readArray(io,_hx_local_33)
+        def _hx_local_34(io):
             return io.readByte()
-        it.convexHullEmitStrings = ReaderExtensions.readArray(io,_hx_local_33)
-        def _hx_local_34(alt,that):
+        it.convexHullEmitStrings = ReaderExtensions.readArray(io,_hx_local_34)
+        def _hx_local_35(alt,that):
             return alt
-        def _hx_local_35(io):
-            return io.readInt32()
         def _hx_local_36(io):
+            return io.readInt32()
+        def _hx_local_37(io):
             return io.readUInt16()
-        it.hullIndices = ReaderExtensions.readArrayAs(io,_hx_local_34,_hx_local_35,_hx_local_36)
-        def _hx_local_37(alt,that):
+        it.hullIndices = ReaderExtensions.readArrayAs(io,_hx_local_35,_hx_local_36,_hx_local_37)
+        def _hx_local_38(alt,that):
             return True
-        def _hx_local_38(io):
-            return io.readUInt16()
         def _hx_local_39(io):
             return io.readUInt16()
-        it.hullPlaneIndices = ReaderExtensions.readArrayAs(io,_hx_local_37,_hx_local_38,_hx_local_39)
-        def _hx_local_40(alt,that):
+        def _hx_local_40(io):
+            return io.readUInt16()
+        it.hullPlaneIndices = ReaderExtensions.readArrayAs(io,_hx_local_38,_hx_local_39,_hx_local_40)
+        def _hx_local_41(alt,that):
             return alt
-        def _hx_local_41(io):
-            return io.readInt32()
         def _hx_local_42(io):
-            return io.readUInt16()
-        it.hullEmitStringIndices = ReaderExtensions.readArrayAs(io,_hx_local_40,_hx_local_41,_hx_local_42)
-        def _hx_local_43(alt,that):
-            return alt
-        def _hx_local_44(io):
             return io.readInt32()
+        def _hx_local_43(io):
+            return io.readUInt16()
+        it.hullEmitStringIndices = ReaderExtensions.readArrayAs(io,_hx_local_41,_hx_local_42,_hx_local_43)
+        def _hx_local_44(alt,that):
+            return alt
         def _hx_local_45(io):
+            return io.readInt32()
+        def _hx_local_46(io):
             return io.readUInt16()
-        it.hullSurfaceIndices = ReaderExtensions.readArrayAs(io,_hx_local_43,_hx_local_44,_hx_local_45)
-        def _hx_local_46(alt,that):
+        it.hullSurfaceIndices = ReaderExtensions.readArrayAs(io,_hx_local_44,_hx_local_45,_hx_local_46)
+        def _hx_local_47(alt,that):
             return True
-        def _hx_local_47(io):
-            return io.readUInt16()
         def _hx_local_48(io):
             return io.readUInt16()
-        it.polyListPlanes = ReaderExtensions.readArrayAs(io,_hx_local_46,_hx_local_47,_hx_local_48)
-        def _hx_local_49(alt,that):
-            return alt
-        def _hx_local_50(io):
-            return io.readInt32()
-        def _hx_local_51(io):
+        def _hx_local_49(io):
             return io.readUInt16()
-        it.polyListPoints = ReaderExtensions.readArrayAs(io,_hx_local_49,_hx_local_50,_hx_local_51)
+        it.polyListPlanes = ReaderExtensions.readArrayAs(io,_hx_local_47,_hx_local_48,_hx_local_49)
+        def _hx_local_50(alt,that):
+            return alt
+        def _hx_local_51(io):
+            return io.readInt32()
         def _hx_local_52(io):
+            return io.readUInt16()
+        it.polyListPoints = ReaderExtensions.readArrayAs(io,_hx_local_50,_hx_local_51,_hx_local_52)
+        def _hx_local_53(io):
             return io.readByte()
-        it.polyListStrings = ReaderExtensions.readArray(io,_hx_local_52)
+        it.polyListStrings = ReaderExtensions.readArray(io,_hx_local_53)
         it.coordBins = list()
         _g = 0
         while (_g < 256):
@@ -1058,13 +1076,13 @@ class Interior:
             _this = it.coordBins
             x = CoordBin.read(io)
             _this.append(x)
-        def _hx_local_53(a,b):
+        def _hx_local_54(a,b):
             return True
-        def _hx_local_54(io):
-            return io.readUInt16()
         def _hx_local_55(io):
             return io.readUInt16()
-        it.coordBinIndices = ReaderExtensions.readArrayAs(io,_hx_local_53,_hx_local_54,_hx_local_55)
+        def _hx_local_56(io):
+            return io.readUInt16()
+        it.coordBinIndices = ReaderExtensions.readArrayAs(io,_hx_local_54,_hx_local_55,_hx_local_56)
         it.coordBinMode = io.readInt32()
         if (version.interiorVersion == 4):
             it.baseAmbientColor = [0, 0, 0, 255]
@@ -1079,9 +1097,9 @@ class Interior:
             if (version.interiorVersion >= 11):
                 it.texNormals = ReaderExtensions.readArray(io,math_Point3F.read)
                 it.texMatrices = ReaderExtensions.readArray(io,TexMatrix.read)
-                def _hx_local_56(io):
+                def _hx_local_57(io):
                     return io.readInt32()
-                it.texMatIndices = ReaderExtensions.readArray(io,_hx_local_56)
+                it.texMatIndices = ReaderExtensions.readArray(io,_hx_local_57)
             else:
                 io.readInt32()
                 io.readInt32()
@@ -1827,10 +1845,10 @@ class VehicleCollision:
         self.convexHulls = None
         self.vehicleCollisionFileVersion = None
 
-    def write(self,io):
+    def write(self,io,version):
         io.writeInt32(self.vehicleCollisionFileVersion)
         def _hx_local_0(io,p):
-            p.write(io)
+            p.write(io,version)
         WriterExtensions.writeArray(io,self.convexHulls,_hx_local_0)
         def _hx_local_1(io,p):
             io.writeByte(p)
@@ -1873,42 +1891,44 @@ class VehicleCollision:
         WriterExtensions.writeArray(io,self.windingIndices,_hx_local_13)
 
     @staticmethod
-    def read(io):
+    def read(io,version):
         ret = VehicleCollision()
         ret.vehicleCollisionFileVersion = io.readInt32()
-        ret.convexHulls = ReaderExtensions.readArray(io,ConvexHull.read)
         def _hx_local_0(io):
-            return io.readByte()
-        ret.convexHullEmitStrings = ReaderExtensions.readArray(io,_hx_local_0)
+            return ConvexHull.read(io,version)
+        ret.convexHulls = ReaderExtensions.readArray(io,_hx_local_0)
         def _hx_local_1(io):
-            return io.readInt32()
-        ret.hullIndices = ReaderExtensions.readArray(io,_hx_local_1)
+            return io.readByte()
+        ret.convexHullEmitStrings = ReaderExtensions.readArray(io,_hx_local_1)
         def _hx_local_2(io):
-            return io.readInt16()
-        ret.hullPlaneIndices = ReaderExtensions.readArray(io,_hx_local_2)
-        def _hx_local_3(io):
             return io.readInt32()
-        ret.hullEmitStringIndices = ReaderExtensions.readArray(io,_hx_local_3)
+        ret.hullIndices = ReaderExtensions.readArray(io,_hx_local_2)
+        def _hx_local_3(io):
+            return io.readInt16()
+        ret.hullPlaneIndices = ReaderExtensions.readArray(io,_hx_local_3)
         def _hx_local_4(io):
             return io.readInt32()
-        ret.hullSurfaceIndices = ReaderExtensions.readArray(io,_hx_local_4)
+        ret.hullEmitStringIndices = ReaderExtensions.readArray(io,_hx_local_4)
         def _hx_local_5(io):
-            return io.readInt16()
-        ret.polyListPlanes = ReaderExtensions.readArray(io,_hx_local_5)
-        def _hx_local_6(io):
             return io.readInt32()
-        ret.polyListPoints = ReaderExtensions.readArray(io,_hx_local_6)
+        ret.hullSurfaceIndices = ReaderExtensions.readArray(io,_hx_local_5)
+        def _hx_local_6(io):
+            return io.readInt16()
+        ret.polyListPlanes = ReaderExtensions.readArray(io,_hx_local_6)
         def _hx_local_7(io):
-            return io.readByte()
-        ret.polyListStrings = ReaderExtensions.readArray(io,_hx_local_7)
+            return io.readInt32()
+        ret.polyListPoints = ReaderExtensions.readArray(io,_hx_local_7)
         def _hx_local_8(io):
+            return io.readByte()
+        ret.polyListStrings = ReaderExtensions.readArray(io,_hx_local_8)
+        def _hx_local_9(io):
             return NullSurface.read(io,Version())
-        ret.nullSurfaces = ReaderExtensions.readArray(io,_hx_local_8)
+        ret.nullSurfaces = ReaderExtensions.readArray(io,_hx_local_9)
         ret.points = ReaderExtensions.readArray(io,math_Point3F.read)
         ret.planes = ReaderExtensions.readArray(io,Plane.read)
-        def _hx_local_9(io):
+        def _hx_local_10(io):
             return io.readInt32()
-        ret.windings = ReaderExtensions.readArray(io,_hx_local_9)
+        ret.windings = ReaderExtensions.readArray(io,_hx_local_10)
         ret.windingIndices = ReaderExtensions.readArray(io,WindingIndex.read)
         return ret
 
@@ -1922,7 +1942,7 @@ class Version:
     def __init__(self):
         self.difVersion = 44
         self.interiorVersion = 0
-        self.interiorType = "mbg"
+        self.interiorType = "?"
 
 
 
@@ -2170,7 +2190,7 @@ class haxe_io_Bytes:
     _hx_class_name = "haxe.io.Bytes"
     __slots__ = ("length", "b")
     _hx_fields = ["length", "b"]
-    _hx_methods = ["blit", "getFloat", "getString"]
+    _hx_methods = ["blit", "getFloat"]
     _hx_statics = ["alloc", "ofData"]
 
     def __init__(self,length,b):
@@ -2185,12 +2205,6 @@ class haxe_io_Bytes:
     def getFloat(self,pos):
         v = (((self.b[pos] | ((self.b[(pos + 1)] << 8))) | ((self.b[(pos + 2)] << 16))) | ((self.b[(pos + 3)] << 24)))
         return haxe_io_FPHelper.i32ToFloat(((v | -2147483648) if ((((v & -2147483648)) != 0)) else v))
-
-    def getString(self,pos,_hx_len,encoding = None):
-        tmp = (encoding is None)
-        if (((pos < 0) or ((_hx_len < 0))) or (((pos + _hx_len) > self.length))):
-            raise haxe_Exception.thrown(haxe_io_Error.OutsideBounds)
-        return self.b[pos:pos+_hx_len].decode('UTF-8','replace')
 
     @staticmethod
     def alloc(length):
@@ -2222,13 +2236,6 @@ class haxe_io_BytesBuffer:
         self.b = None
         return _hx_bytes
 
-
-class haxe_io_Encoding(Enum):
-    __slots__ = ()
-    _hx_class_name = "haxe.io.Encoding"
-    _hx_constructs = ["UTF8", "RawNative"]
-haxe_io_Encoding.UTF8 = haxe_io_Encoding("UTF8", 0, ())
-haxe_io_Encoding.RawNative = haxe_io_Encoding("RawNative", 1, ())
 
 
 class haxe_io_Eof:
@@ -2457,11 +2464,14 @@ class io_BytesReader:
 
     def readStr(self):
         _hx_len = self.readByte()
-        _hx_str = self.bytes.getString(self.position,_hx_len)
-        _hx_local_0 = self
-        _hx_local_1 = _hx_local_0.position
-        _hx_local_0.position = (_hx_local_1 + _hx_len)
-        _hx_local_0.position
+        _hx_str = ""
+        _g = 0
+        _g1 = _hx_len
+        while (_g < _g1):
+            i = _g
+            _g = (_g + 1)
+            code = self.readByte()
+            _hx_str = (("null" if _hx_str is None else _hx_str) + HxOverrides.stringOrNull("".join(map(chr,[code]))))
         return _hx_str
 
     def readFloat(self):
@@ -2530,16 +2540,28 @@ class math_Box3F:
     _hx_class_name = "math.Box3F"
     __slots__ = ("minX", "minY", "minZ", "maxX", "maxY", "maxZ")
     _hx_fields = ["minX", "minY", "minZ", "maxX", "maxY", "maxZ"]
-    _hx_methods = ["center", "Expand", "contains", "write"]
+    _hx_methods = ["center", "Expand", "contains", "getClosestPoint", "write"]
     _hx_statics = ["PointBounds", "read"]
 
-    def __init__(self):
-        self.minX = 0
-        self.minY = 0
-        self.minZ = 0
-        self.maxX = 0
-        self.maxY = 0
-        self.maxZ = 0
+    def __init__(self,minX = None,minY = None,minZ = None,maxX = None,maxY = None,maxZ = None):
+        if (minX is None):
+            minX = 0.0
+        if (minY is None):
+            minY = 0.0
+        if (minZ is None):
+            minZ = 0.0
+        if (maxX is None):
+            maxX = 0.0
+        if (maxY is None):
+            maxY = 0.0
+        if (maxZ is None):
+            maxZ = 0.0
+        self.minX = minX
+        self.minY = minY
+        self.minZ = minZ
+        self.maxX = maxX
+        self.maxY = maxY
+        self.maxZ = maxZ
 
     def center(self):
         return math_Point3F((self.minX + self.maxX),(self.minY + self.maxY),(self.minZ + self.maxZ)).scalarDiv(2)
@@ -2563,6 +2585,28 @@ class math_Box3F:
             return (p.z <= self.maxZ)
         else:
             return False
+
+    def getClosestPoint(self,point):
+        closest = math_Point3F()
+        if (self.minX > point.x):
+            closest.x = self.minX
+        elif (self.maxX < point.x):
+            closest.x = self.maxX
+        else:
+            closest.x = point.x
+        if (self.minY > point.y):
+            closest.y = self.minY
+        elif (self.maxY < point.y):
+            closest.y = self.maxY
+        else:
+            closest.y = point.y
+        if (self.minZ > point.z):
+            closest.z = self.minZ
+        elif (self.maxZ < point.z):
+            closest.z = self.maxZ
+        else:
+            closest.z = point.z
+        return closest
 
     def write(self,io):
         io.writeFloat(self.minX)
