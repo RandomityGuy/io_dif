@@ -40,7 +40,7 @@ bl_info = {
     "author": "RandomityGuy",
     "description": "Dif import and export plguin for blender",
     "blender": (2, 80, 0),
-    "version": (1, 1, 5),
+    "version": (1, 1, 6),
     "location": "File > Import-Export",
     "warning": "",
     "category": "Import-Export",
@@ -201,9 +201,9 @@ class ExportDIF(bpy.types.Operator, ExportHelper):
     maxpolys = IntProperty(
         name="Polygons per DIF",
         description="Maximum number of polygons till a dif split is done",
-        default=16000,
+        default=12000,
         min=1,
-        max=16000,
+        max=12000,
     )
 
     applymodifiers = BoolProperty(
@@ -235,7 +235,7 @@ class ExportDIF(bpy.types.Operator, ExportHelper):
             keywords["filepath"],
             keywords.get("flip", False),
             keywords.get("double", False),
-            keywords.get("maxpolys", 16000),
+            keywords.get("maxpolys", 12000),
             keywords.get("applymodifiers", True),
             keywords.get("exportvisible", True),
             keywords.get("exportselected", False),

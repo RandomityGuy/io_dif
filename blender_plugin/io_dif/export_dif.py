@@ -316,7 +316,7 @@ def save(
     filepath: str = "",
     flip=False,
     double=False,
-    maxtricount=16000,
+    maxtricount=12000,
     applymodifiers=True,
     exportvisible=True,
     exportselected=False,

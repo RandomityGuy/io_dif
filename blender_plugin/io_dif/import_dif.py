@@ -67,7 +67,7 @@ def create_mesh(filepath, interior: Interior):
                 index1 = interior.windings[i + surface.windingStart + 1]
                 index2 = interior.windings[i + surface.windingStart + 2]
 
-            plane_flipped = (surface.planeIndex & 0x8000) == 0x8000
+            plane_flipped = surface.planeFlipped
             normal_index = interior.planes[surface.planeIndex & ~0x8000].normalIndex
             tex_gen = interior.texGenEQs[surface.texGenIndex]
 
