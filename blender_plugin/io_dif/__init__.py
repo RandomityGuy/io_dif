@@ -40,7 +40,7 @@ bl_info = {
     "author": "RandomityGuy",
     "description": "Dif import and export plguin for blender",
     "blender": (2, 80, 0),
-    "version": (1, 1, 6),
+    "version": (1, 1, 7),
     "location": "File > Import-Export",
     "warning": "",
     "category": "Import-Export",
@@ -48,8 +48,8 @@ bl_info = {
 
 
 class InteriorKVP(bpy.types.PropertyGroup):
-    key = StringProperty(name="")
-    value = StringProperty(name="")
+    key: StringProperty(name="")
+    value: StringProperty(name="")
 
 
 class AddCustomProperty(bpy.types.Operator):
@@ -68,7 +68,7 @@ class DeleteCustomProperty(bpy.types.Operator):
     bl_idname = "dif.delete_prop"
     bl_label = "Delete Property"
 
-    delete_id = IntProperty()
+    delete_id: IntProperty()
 
     def execute(self, context):
         dif_props: InteriorSettings = context.object.dif_props
@@ -77,7 +77,7 @@ class DeleteCustomProperty(bpy.types.Operator):
 
 
 class InteriorSettings(bpy.types.PropertyGroup):
-    interior_type = EnumProperty(
+    interior_type: EnumProperty(
         name="Interior Entity Type",
         items=(
             ("static_interior", "InteriorResource", "Normal static interior"),
@@ -87,10 +87,10 @@ class InteriorSettings(bpy.types.PropertyGroup):
         default="static_interior",
     )
 
-    marker_path = PointerProperty(type=bpy.types.Curve, name="Marker Path")
-    game_entity_datablock = StringProperty(name="Datablock")
-    game_entity_gameclass = StringProperty(name="Game Class")
-    game_entity_properties = CollectionProperty(
+    marker_path: PointerProperty(type=bpy.types.Curve, name="Marker Path")
+    game_entity_datablock: StringProperty(name="Datablock")
+    game_entity_gameclass: StringProperty(name="Game Class")
+    game_entity_properties: CollectionProperty(
         type=InteriorKVP, name="Custom Properties"
     )
 
@@ -181,24 +181,24 @@ class ExportDIF(bpy.types.Operator, ExportHelper):
     bl_options = {"PRESET"}
 
     filename_ext = ".dif"
-    filter_glob = StringProperty(
+    filter_glob: StringProperty(
         default="*.dif",
         options={"HIDDEN"},
     )
 
-    flip = BoolProperty(
+    flip: BoolProperty(
         name="Flip faces",
         description="Flip normals of the faces, in case the resultant dif is inside out.",
         default=False,
     )
 
-    double = BoolProperty(
+    double: BoolProperty(
         name="Double faces",
         description="Make all the faces double sided, may cause lag during collision detection.",
         default=False,
     )
 
-    maxpolys = IntProperty(
+    maxpolys: IntProperty(
         name="Polygons per DIF",
         description="Maximum number of polygons till a dif split is done",
         default=12000,
@@ -206,19 +206,19 @@ class ExportDIF(bpy.types.Operator, ExportHelper):
         max=12000,
     )
 
-    applymodifiers = BoolProperty(
+    applymodifiers: BoolProperty(
         name="Apply Modifiers",
         description="Apply modifiers during export",
         default=True,
     )
 
-    exportvisible = BoolProperty(
+    exportvisible: BoolProperty(
         name="Export Visible",
         description="Export only visible geometry",
         default=True,
     )
 
-    exportselected = BoolProperty(
+    exportselected: BoolProperty(
         name="Export Selected",
         description="Export only selected geometry",
         default=False,

@@ -1,2 +1,6 @@
 build
+out
+release
+.vs
 .vscode
+CMakeSettings.json
