@@ -622,8 +622,8 @@ class GameEntity:
 
 class Interior:
     _hx_class_name = "Interior"
-    __slots__ = ("detailLevel", "minPixels", "boundingBox", "boundingSphere", "hasAlarmState", "numLightStateEntries", "normals", "planes", "points", "pointVisibilities", "texGenEQs", "bspNodes", "bspSolidLeaves", "materialListVersion", "materialList", "windings", "windingIndices", "edges", "zones", "zoneSurfaces", "zoneStaticMeshes", "zonePortalList", "portals", "surfaces", "edges2", "normals2", "normalIndices", "normalLMapIndices", "alarmLMapIndices", "nullSurfaces", "lightMaps", "solidLeafSurfaces", "animatedLights", "lightStates", "stateDatas", "stateDataFlags", "stateDataBuffers", "nameBuffer", "numSubObjects", "convexHulls", "convexHullEmitStrings", "hullIndices", "hullPlaneIndices", "hullEmitStringIndices", "hullSurfaceIndices", "polyListPlanes", "polyListPoints", "polyListStrings", "coordBins", "coordBinIndices", "coordBinMode", "baseAmbientColor", "alarmAmbientColor", "numStaticMeshes", "texNormals", "texMatrices", "texMatIndices", "extendedLightMapData", "lightMapBorderSize")
-    _hx_fields = ["detailLevel", "minPixels", "boundingBox", "boundingSphere", "hasAlarmState", "numLightStateEntries", "normals", "planes", "points", "pointVisibilities", "texGenEQs", "bspNodes", "bspSolidLeaves", "materialListVersion", "materialList", "windings", "windingIndices", "edges", "zones", "zoneSurfaces", "zoneStaticMeshes", "zonePortalList", "portals", "surfaces", "edges2", "normals2", "normalIndices", "normalLMapIndices", "alarmLMapIndices", "nullSurfaces", "lightMaps", "solidLeafSurfaces", "animatedLights", "lightStates", "stateDatas", "stateDataFlags", "stateDataBuffers", "nameBuffer", "numSubObjects", "convexHulls", "convexHullEmitStrings", "hullIndices", "hullPlaneIndices", "hullEmitStringIndices", "hullSurfaceIndices", "polyListPlanes", "polyListPoints", "polyListStrings", "coordBins", "coordBinIndices", "coordBinMode", "baseAmbientColor", "alarmAmbientColor", "numStaticMeshes", "texNormals", "texMatrices", "texMatIndices", "extendedLightMapData", "lightMapBorderSize"]
+    __slots__ = ("detailLevel", "minPixels", "boundingBox", "boundingSphere", "hasAlarmState", "numLightStateEntries", "normals", "planes", "points", "pointVisibilities", "texGenEQs", "bspNodes", "bspSolidLeaves", "materialListVersion", "materialList", "windings", "windingIndices", "edges", "zones", "zoneSurfaces", "zoneStaticMeshes", "zonePortalList", "portals", "surfaces", "edges2", "normals2", "normalIndices", "normalLMapIndices", "alarmLMapIndices", "nullSurfaces", "lightMaps", "solidLeafSurfaces", "animatedLights", "lightStates", "stateDatas", "stateDataFlags", "stateDataBuffers", "nameBuffer", "subObjects", "convexHulls", "convexHullEmitStrings", "hullIndices", "hullPlaneIndices", "hullEmitStringIndices", "hullSurfaceIndices", "polyListPlanes", "polyListPoints", "polyListStrings", "coordBins", "coordBinIndices", "coordBinMode", "baseAmbientColor", "alarmAmbientColor", "numStaticMeshes", "texNormals", "texMatrices", "texMatIndices", "extendedLightMapData", "lightMapBorderSize")
+    _hx_fields = ["detailLevel", "minPixels", "boundingBox", "boundingSphere", "hasAlarmState", "numLightStateEntries", "normals", "planes", "points", "pointVisibilities", "texGenEQs", "bspNodes", "bspSolidLeaves", "materialListVersion", "materialList", "windings", "windingIndices", "edges", "zones", "zoneSurfaces", "zoneStaticMeshes", "zonePortalList", "portals", "surfaces", "edges2", "normals2", "normalIndices", "normalLMapIndices", "alarmLMapIndices", "nullSurfaces", "lightMaps", "solidLeafSurfaces", "animatedLights", "lightStates", "stateDatas", "stateDataFlags", "stateDataBuffers", "nameBuffer", "subObjects", "convexHulls", "convexHullEmitStrings", "hullIndices", "hullPlaneIndices", "hullEmitStringIndices", "hullSurfaceIndices", "polyListPlanes", "polyListPoints", "polyListStrings", "coordBins", "coordBinIndices", "coordBinMode", "baseAmbientColor", "alarmAmbientColor", "numStaticMeshes", "texNormals", "texMatrices", "texMatIndices", "extendedLightMapData", "lightMapBorderSize"]
     _hx_methods = ["write"]
     _hx_statics = ["read"]
 
@@ -648,7 +648,7 @@ class Interior:
         self.hullIndices = None
         self.convexHullEmitStrings = None
         self.convexHulls = None
-        self.numSubObjects = None
+        self.subObjects = None
         self.nameBuffer = None
         self.stateDataBuffers = None
         self.stateDataFlags = None
@@ -806,7 +806,14 @@ class Interior:
             def _hx_local_32(io,p):
                 io.writeByte(p)
             WriterExtensions.writeArray(io,self.nameBuffer,_hx_local_32)
-            io.writeInt32(self.numSubObjects)
+            io.writeInt32(len(self.subObjects))
+            _g = 0
+            _g1 = len(self.subObjects)
+            while (_g < _g1):
+                i = _g
+                _g = (_g + 1)
+                io.writeInt32(1)
+                (self.subObjects[i] if i >= 0 and i < len(self.subObjects) else None).write(io,version)
         def _hx_local_33(io,p):
             p.write(io,version)
         WriterExtensions.writeArray(io,self.convexHulls,_hx_local_33)
@@ -1015,7 +1022,7 @@ class Interior:
             it.stateDatas = list()
             it.stateDataFlags = 0
             it.stateDataBuffers = list()
-            it.numSubObjects = 0
+            it.subObjects = list()
         else:
             it.stateDatas = ReaderExtensions.readArray(io,StateData.read)
             def _hx_local_32(io):
@@ -1025,58 +1032,94 @@ class Interior:
                 return io.readByte()
             it.nameBuffer = ReaderExtensions.readArray(io,_hx_local_33)
             it.stateDataFlags = 0
-            it.numSubObjects = io.readInt32()
-        def _hx_local_34(io):
-            return ConvexHull.read(io,version)
-        it.convexHulls = ReaderExtensions.readArray(io,_hx_local_34)
+            def _hx_local_34(io):
+                soKey = io.readInt32()
+                if (soKey == 1):
+                    return MirrorSubObject.read(io,version)
+                else:
+                    raise haxe_Exception("Unknown SubObject key: ")
+            it.subObjects = ReaderExtensions.readArray(io,_hx_local_34)
         def _hx_local_35(io):
+            return ConvexHull.read(io,version)
+        it.convexHulls = ReaderExtensions.readArray(io,_hx_local_35)
+        def _hx_local_36(io):
             return io.readByte()
-        it.convexHullEmitStrings = ReaderExtensions.readArray(io,_hx_local_35)
-        def _hx_local_36(alt,that):
-            return alt
-        def _hx_local_37(io):
-            return io.readInt32()
-        def _hx_local_38(io):
-            return io.readUInt16()
-        it.hullIndices = ReaderExtensions.readArrayAs(io,_hx_local_36,_hx_local_37,_hx_local_38)
-        def _hx_local_39(alt,that):
-            return True
-        def _hx_local_40(io):
-            return io.readUInt16()
-        def _hx_local_41(io):
-            return io.readUInt16()
-        it.hullPlaneIndices = ReaderExtensions.readArrayAs(io,_hx_local_39,_hx_local_40,_hx_local_41)
-        def _hx_local_42(alt,that):
-            return alt
-        def _hx_local_43(io):
-            return io.readInt32()
-        def _hx_local_44(io):
-            return io.readUInt16()
-        it.hullEmitStringIndices = ReaderExtensions.readArrayAs(io,_hx_local_42,_hx_local_43,_hx_local_44)
-        def _hx_local_45(alt,that):
-            return alt
-        def _hx_local_46(io):
-            return io.readInt32()
-        def _hx_local_47(io):
-            return io.readUInt16()
-        it.hullSurfaceIndices = ReaderExtensions.readArrayAs(io,_hx_local_45,_hx_local_46,_hx_local_47)
-        def _hx_local_48(alt,that):
-            return True
-        def _hx_local_49(io):
-            return io.readUInt16()
-        def _hx_local_50(io):
-            return io.readUInt16()
-        it.polyListPlanes = ReaderExtensions.readArrayAs(io,_hx_local_48,_hx_local_49,_hx_local_50)
-        def _hx_local_51(alt,that):
-            return alt
-        def _hx_local_52(io):
-            return io.readInt32()
-        def _hx_local_53(io):
-            return io.readUInt16()
-        it.polyListPoints = ReaderExtensions.readArrayAs(io,_hx_local_51,_hx_local_52,_hx_local_53)
-        def _hx_local_54(io):
+        it.convexHullEmitStrings = ReaderExtensions.readArray(io,_hx_local_36)
+        if (version.interiorVersion == 0):
+            def _hx_local_37(io):
+                return io.readInt32()
+            it.hullIndices = ReaderExtensions.readArray(io,_hx_local_37)
+        else:
+            def _hx_local_38(alt,that):
+                return alt
+            def _hx_local_39(io):
+                return io.readInt32()
+            def _hx_local_40(io):
+                return io.readUInt16()
+            it.hullIndices = ReaderExtensions.readArrayAs(io,_hx_local_38,_hx_local_39,_hx_local_40)
+        if (version.interiorVersion == 0):
+            def _hx_local_41(io):
+                return io.readUInt16()
+            it.hullPlaneIndices = ReaderExtensions.readArray(io,_hx_local_41)
+        else:
+            def _hx_local_42(alt,that):
+                return True
+            def _hx_local_43(io):
+                return io.readInt32()
+            def _hx_local_44(io):
+                return io.readUInt16()
+            it.hullPlaneIndices = ReaderExtensions.readArrayAs(io,_hx_local_42,_hx_local_43,_hx_local_44)
+        if (version.interiorVersion == 0):
+            def _hx_local_45(io):
+                return io.readInt32()
+            it.hullEmitStringIndices = ReaderExtensions.readArray(io,_hx_local_45)
+        else:
+            def _hx_local_46(alt,that):
+                return alt
+            def _hx_local_47(io):
+                return io.readInt32()
+            def _hx_local_48(io):
+                return io.readUInt16()
+            it.hullEmitStringIndices = ReaderExtensions.readArrayAs(io,_hx_local_46,_hx_local_47,_hx_local_48)
+        if (version.interiorVersion == 0):
+            def _hx_local_49(io):
+                return io.readInt32()
+            it.hullSurfaceIndices = ReaderExtensions.readArray(io,_hx_local_49)
+        else:
+            def _hx_local_50(alt,that):
+                return alt
+            def _hx_local_51(io):
+                return io.readInt32()
+            def _hx_local_52(io):
+                return io.readUInt16()
+            it.hullSurfaceIndices = ReaderExtensions.readArrayAs(io,_hx_local_50,_hx_local_51,_hx_local_52)
+        if (version.interiorVersion == 0):
+            def _hx_local_53(io):
+                return io.readUInt16()
+            it.polyListPlanes = ReaderExtensions.readArray(io,_hx_local_53)
+        else:
+            def _hx_local_54(alt,that):
+                return True
+            def _hx_local_55(io):
+                return io.readInt32()
+            def _hx_local_56(io):
+                return io.readUInt16()
+            it.polyListPlanes = ReaderExtensions.readArrayAs(io,_hx_local_54,_hx_local_55,_hx_local_56)
+        if (version.interiorVersion == 0):
+            def _hx_local_57(io):
+                return io.readInt32()
+            it.polyListPoints = ReaderExtensions.readArray(io,_hx_local_57)
+        else:
+            def _hx_local_58(alt,that):
+                return alt
+            def _hx_local_59(io):
+                return io.readInt32()
+            def _hx_local_60(io):
+                return io.readUInt16()
+            it.polyListPoints = ReaderExtensions.readArrayAs(io,_hx_local_58,_hx_local_59,_hx_local_60)
+        def _hx_local_61(io):
             return io.readByte()
-        it.polyListStrings = ReaderExtensions.readArray(io,_hx_local_54)
+        it.polyListStrings = ReaderExtensions.readArray(io,_hx_local_61)
         it.coordBins = list()
         _g = 0
         while (_g < 256):
@@ -1085,13 +1128,13 @@ class Interior:
             _this = it.coordBins
             x = CoordBin.read(io)
             _this.append(x)
-        def _hx_local_55(a,b):
+        def _hx_local_62(a,b):
             return True
-        def _hx_local_56(io):
+        def _hx_local_63(io):
             return io.readUInt16()
-        def _hx_local_57(io):
+        def _hx_local_64(io):
             return io.readUInt16()
-        it.coordBinIndices = ReaderExtensions.readArrayAs(io,_hx_local_55,_hx_local_56,_hx_local_57)
+        it.coordBinIndices = ReaderExtensions.readArrayAs(io,_hx_local_62,_hx_local_63,_hx_local_64)
         it.coordBinMode = io.readInt32()
         if (version.interiorVersion == 4):
             it.baseAmbientColor = [0, 0, 0, 255]
@@ -1106,9 +1149,9 @@ class Interior:
             if (version.interiorVersion >= 11):
                 it.texNormals = ReaderExtensions.readArray(io,math_Point3F.read)
                 it.texMatrices = ReaderExtensions.readArray(io,TexMatrix.read)
-                def _hx_local_58(io):
+                def _hx_local_65(io):
                     return io.readInt32()
-                it.texMatIndices = ReaderExtensions.readArray(io,_hx_local_58)
+                it.texMatIndices = ReaderExtensions.readArray(io,_hx_local_65)
             else:
                 io.readInt32()
                 io.readInt32()
@@ -1224,6 +1267,42 @@ class LightState:
     @staticmethod
     def read(io):
         return LightState(io.readByte(),io.readByte(),io.readByte(),io.readInt32(),io.readInt32(),io.readInt16())
+
+
+
+class MirrorSubObject:
+    _hx_class_name = "MirrorSubObject"
+    __slots__ = ("detailLevel", "zone", "alphaLevel", "surfaceCount", "surfaceStart", "centroid")
+    _hx_fields = ["detailLevel", "zone", "alphaLevel", "surfaceCount", "surfaceStart", "centroid"]
+    _hx_methods = ["write"]
+    _hx_statics = ["read"]
+
+    def __init__(self):
+        self.detailLevel = 0
+        self.zone = 0
+        self.alphaLevel = 0
+        self.surfaceCount = 0
+        self.surfaceStart = 0
+        self.centroid = math_Point3F()
+
+    def write(self,io,version):
+        io.writeInt32(self.detailLevel)
+        io.writeInt32(self.zone)
+        io.writeFloat(self.alphaLevel)
+        io.writeInt32(self.surfaceCount)
+        io.writeInt32(self.surfaceStart)
+        self.centroid.write(io)
+
+    @staticmethod
+    def read(io,version):
+        ret = MirrorSubObject()
+        ret.detailLevel = io.readInt32()
+        ret.zone = io.readInt32()
+        ret.alphaLevel = io.readFloat()
+        ret.surfaceCount = io.readInt32()
+        ret.surfaceStart = io.readInt32()
+        ret.centroid = math_Point3F.read(io)
+        return ret
 
 
 

@@ -38,9 +38,9 @@ from bpy_extras.io_utils import (
 bl_info = {
     "name": "Torque DIF",
     "author": "RandomityGuy",
-    "description": "Dif import and export plguin for blender",
+    "description": "Dif import and export plugin for blender",
     "blender": (2, 80, 0),
-    "version": (1, 1, 8),
+    "version": (1, 1, 9),
     "location": "File > Import-Export",
     "warning": "",
     "category": "Import-Export",
