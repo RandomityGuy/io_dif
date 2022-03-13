@@ -19,6 +19,9 @@ if "bpy" in locals():
     if "import_dif" in locals():
         importlib.reload(import_dif)
 
+    if "import_csx" in locals():
+        importlib.reload(import_csx)
+
 import os
 import bpy
 from bpy.props import (
@@ -40,7 +43,7 @@ bl_info = {
     "author": "RandomityGuy",
     "description": "Dif import and export plugin for blender",
     "blender": (2, 80, 0),
-    "version": (1, 1, 10),
+    "version": (1, 2, 0),
     "location": "File > Import-Export",
     "warning": "",
     "category": "Import-Export",
@@ -133,6 +136,44 @@ class InteriorPanel(bpy.types.Panel):
                 sublayout.operator(
                     DeleteCustomProperty.bl_idname, icon="X", text=""
                 ).delete_id = i
+
+
+class ImportCSX(bpy.types.Operator, ImportHelper):
+    """Load a Torque Constructor CSX File"""
+
+    bl_idname = "import_scene.csx"
+    bl_label = "Import Constructor CSX"
+    bl_options = {"PRESET"}
+
+    filename_ext = ".csx"
+    filter_glob = StringProperty(
+        default="*.csx",
+        options={"HIDDEN"},
+    )
+
+    check_extension = True
+
+    def execute(self, context):
+        # print("Selected: " + context.active_object.name)
+        from . import import_csx
+
+        keywords = self.as_keywords(
+            ignore=(
+                "axis_forward",
+                "axis_up",
+                "filter_glob",
+            )
+        )
+
+        if bpy.data.is_saved and context.user_preferences.filepaths.use_relative_paths:
+            import os
+
+            keywords["relpath"] = os.path.dirname(bpy.data.filepath)
+
+        return import_csx.load(context, **keywords)
+
+    def draw(self, context):
+        pass
 
 
 class ImportDIF(bpy.types.Operator, ImportHelper):
@@ -243,7 +284,7 @@ class ExportDIF(bpy.types.Operator, ExportHelper):
         return {"FINISHED"}
 
 
-classes = (ExportDIF, ImportDIF)
+classes = (ExportDIF, ImportDIF, ImportCSX)
 
 
 def menu_func_export_dif(self, context):
@@ -254,11 +295,16 @@ def menu_func_import_dif(self, context):
     self.layout.operator(ImportDIF.bl_idname, text="Torque (.dif)")
 
 
+def menu_func_import_csx(self, context):
+    self.layout.operator(ImportCSX.bl_idname, text="Torque Constructor (.csx)")
+
+
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
     bpy.types.TOPBAR_MT_file_export.append(menu_func_export_dif)
     bpy.types.TOPBAR_MT_file_import.append(menu_func_import_dif)
+    bpy.types.TOPBAR_MT_file_import.append(menu_func_import_csx)
     bpy.utils.register_class(InteriorPanel)
     bpy.utils.register_class(AddCustomProperty)
     bpy.utils.register_class(DeleteCustomProperty)
@@ -281,6 +327,7 @@ def unregister():
         bpy.utils.unregister_class(cls)
     bpy.types.TOPBAR_MT_file_export.remove(menu_func_export_dif)
     bpy.types.TOPBAR_MT_file_import.remove(menu_func_import_dif)
+    bpy.types.TOPBAR_MT_file_import.remove(menu_func_import_csx)
     bpy.utils.unregister_class(InteriorPanel)
     bpy.utils.unregister_class(AddCustomProperty)
     bpy.utils.unregister_class(DeleteCustomProperty)
