@@ -270,13 +270,16 @@ def create_mesh(filepath, brush: CSXBrush):
 
     for face in brush.faces:
         for i in range(0, len(face.indices) - 2):
-            index0 = face.indices[0]
+            index0 = face.indices[i + 2]
             index1 = face.indices[i + 1]
-            index2 = face.indices[i + 2]
+            index2 = face.indices[0]
 
             tex_gen = face.texgen
 
             normal = face.plane[:3]
+            normal[0] *= -1
+            normal[1] *= -1
+            normal[2] *= -1
 
             pt0 = brush.vertices[index0]
             pt1 = brush.vertices[index1]
