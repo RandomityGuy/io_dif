@@ -147,6 +147,10 @@ class DifBuilder:
         p2arr = (ctypes.c_float * len(p2))(*p2)
         p3arr = (ctypes.c_float * len(p3))(*p3)
 
+        uv1 = (uv1[0], -uv1[1])
+        uv2 = (uv2[0], -uv2[1])
+        uv3 = (uv3[0], -uv3[1])
+
         uv1arr = (ctypes.c_float * len(uv1))(*uv1)
         uv2arr = (ctypes.c_float * len(uv2))(*uv2)
         uv3arr = (ctypes.c_float * len(uv3))(*uv3)
@@ -332,7 +336,7 @@ def save(
 
     depsgraph = context.evaluated_depsgraph_get()
 
-    off = get_offset(depsgraph, applymodifiers)
+    off = [0, 0, 0] #get_offset(depsgraph, applymodifiers)
 
     tris = 0
 

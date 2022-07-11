@@ -86,15 +86,15 @@ def create_mesh(filepath, interior: Interior):
 
             coord0 = [
                 plane_to_uv(pt0, tex_gen.planeX),
-                plane_to_uv(pt0, tex_gen.planeY),
+                -plane_to_uv(pt0, tex_gen.planeY),
             ]
             coord1 = [
                 plane_to_uv(pt1, tex_gen.planeX),
-                plane_to_uv(pt1, tex_gen.planeY),
+                -plane_to_uv(pt1, tex_gen.planeY),
             ]
             coord2 = [
                 plane_to_uv(pt2, tex_gen.planeX),
-                plane_to_uv(pt2, tex_gen.planeY),
+                -plane_to_uv(pt2, tex_gen.planeY),
             ]
 
             indices.append((index0, len(normals), len(tex_coords)))
