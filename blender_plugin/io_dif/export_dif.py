@@ -159,6 +159,9 @@ class DifBuilder:
 
         mat = ctypes.c_char_p(material.encode("ascii"))
 
+        #Debug lines 
+        # print((p3arr, p2arr, p1arr, uv3arr, uv2arr, uv1arr, narr, mat))
+        #Cont
         difbuilderlib.add_triangle(
             self.__ptr__, p3arr, p2arr, p1arr, uv3arr, uv2arr, uv1arr, narr, mat
         )
@@ -179,7 +182,21 @@ class DifBuilder:
         )
 
     def build(self):
-        return Dif(difbuilderlib.build(self.__ptr__))
+        
+        try:
+            built = difbuilderlib.build(self.__ptr__)
+        except OSError as e:
+            print(e)
+            print(e.winerror)
+            print(e.strerror)
+            raise e
+        try:
+            return Dif(built)
+        except OSError as e:
+            print(e)
+            print(e.winerror)
+            print(e.strerror)
+            raise e
 
 
 def mesh_triangulate(me):
@@ -328,7 +345,7 @@ def save(
 ):
     import bpy
     import bmesh
-    
+
     #bpy.ops.object.duplicates_make_real()
     
     #def get_objects():
@@ -393,6 +410,9 @@ def save(
                 if poly.material_index != None
                 else "NULL"
             )
+
+            # Debug
+            print((p1, p2, p3, uv1, uv2, uv3, n, material))
 
             if not flip:
                 difbuilder.add_triangle(p1, p2, p3, uv1, uv2, uv3, n, material)
@@ -462,6 +482,7 @@ def save(
             try:
                 save_mesh(ob_eval, me, off, flip, double)
             except:
+                print("Skipping mesh")
                 continue
             
 
@@ -472,6 +493,10 @@ def save(
 
     for (mp, curve) in mp_list:
         mp_difs.append(build_pathed_interior(mp, curve, off, flip, double))
+
+    #DEBUG
+    print("Generated tris:")
+    print(tris)
 
     if tris != 0:
         for i in range(0, len(builders)):
