@@ -212,6 +212,7 @@ def get_offset(depsgraph, applymodifiers=True):
 
     for obj in obs:
         ob_eval = obj.evaluated_get(depsgraph) if applymodifiers else obj
+        
         try:
             mesh = ob_eval.to_mesh()
         except RuntimeError:
@@ -327,7 +328,13 @@ def save(
 ):
     import bpy
     import bmesh
+    
+    #bpy.ops.object.duplicates_make_real()
+    
+    #def get_objects():
+    #    return bpy.context.selected_objects if exportselected else bpy.context.scene.objects
 
+    #obs = get_objects()
     obs = bpy.context.selected_objects if exportselected else bpy.context.scene.objects
 
     builders = [DifBuilder()]
@@ -346,6 +353,10 @@ def save(
         nonlocal tris, difbuilder
 
         mesh_triangulate(mesh)
+        
+        print(mesh)
+        print(mesh.uv_layers)
+        print(mesh.uv_layers.items())
 
         mesh_verts = mesh.vertices
 
@@ -398,27 +409,61 @@ def save(
 
     mp_list = []
     game_entities: list[Object] = []
+    
+    def is_object_instance_selected(object_instance):
+        # For instanced objects we check selection of their instancer (more accurately: check
+        # selection status of the original object corresponding to the instancer).
+        if object_instance.parent:
+            return object_instance.parent.original.select_get()
+        # For non-instanced objects we check selection state of the original object.
+        return object_instance.object.original.select_get()
+    
+    def is_object_instance_visible(object_instance):
+        # For instanced objects we check visibility of their instancer (more accurately: check
+        # vsibility status of the original object corresponding to the instancer).
+        if object_instance.parent:
+            return object_instance.parent.original.visible_get()
+        # For non-instanced objects we check visibility state of the original object.
+        return object_instance.object.original.visible_get()
+    
+    def create_mesh_for_object_instance(object_instance):
+        if applymodifiers:
+            return object_instance.object.to_mesh()
+        else:
+            return object_instance.object.original.to_mesh()
 
-    for ob in obs:
+    #for ob in obs:
+    for object_instance in depsgraph.object_instances:
+        if exportselected:
+            if not is_object_instance_selected(object_instance):
+                continue
         if exportvisible:
-            if not ob.visible_get():
+            #if not ob.visible_get():
+            if not is_object_instance_visible(object_instance):
                 continue
 
-        ob_eval = ob.evaluated_get(depsgraph) if applymodifiers else ob
+        #ob_eval = ob.evaluated_get(depsgraph) if applymodifiers else ob
+        ob_eval = object_instance.object if applymodifiers else object_instance.object.original
 
         dif_props = ob_eval.dif_props
+        #dif_props = object_instance.object.dif_props
 
         if dif_props.interior_type == "game_entity":
             game_entities.append(ob_eval)
 
         try:
             me = ob_eval.to_mesh()
+            #me = create_mesh_for_object_instance(object_instance)
         except RuntimeError:
             continue
 
         if dif_props.interior_type == "static_interior":
             me.transform(ob_eval.matrix_world)
-            save_mesh(ob_eval, me, off, flip, double)
+            try:
+                save_mesh(ob_eval, me, off, flip, double)
+            except:
+                continue
+            
 
         if dif_props.interior_type == "pathed_interior":
             mp_list.append((ob_eval, dif_props.marker_path))
