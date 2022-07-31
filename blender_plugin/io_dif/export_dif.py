@@ -159,9 +159,6 @@ class DifBuilder:
 
         mat = ctypes.c_char_p(material.encode("ascii"))
 
-        #Debug lines 
-        # print((p3arr, p2arr, p1arr, uv3arr, uv2arr, uv1arr, narr, mat))
-        #Cont
         difbuilderlib.add_triangle(
             self.__ptr__, p3arr, p2arr, p1arr, uv3arr, uv2arr, uv1arr, narr, mat
         )
@@ -182,21 +179,7 @@ class DifBuilder:
         )
 
     def build(self):
-        
-        try:
-            built = difbuilderlib.build(self.__ptr__)
-        except OSError as e:
-            print(e)
-            print(e.winerror)
-            print(e.strerror)
-            raise e
-        try:
-            return Dif(built)
-        except OSError as e:
-            print(e)
-            print(e.winerror)
-            print(e.strerror)
-            raise e
+        return Dif(difbuilderlib.build(self.__ptr__))
 
 
 def mesh_triangulate(me):
@@ -229,7 +212,6 @@ def get_offset(depsgraph, applymodifiers=True):
 
     for obj in obs:
         ob_eval = obj.evaluated_get(depsgraph) if applymodifiers else obj
-        
         try:
             mesh = ob_eval.to_mesh()
         except RuntimeError:
@@ -346,14 +328,6 @@ def save(
     import bpy
     import bmesh
 
-    #bpy.ops.object.duplicates_make_real()
-    
-    #def get_objects():
-    #    return bpy.context.selected_objects if exportselected else bpy.context.scene.objects
-
-    #obs = get_objects()
-    obs = bpy.context.selected_objects if exportselected else bpy.context.scene.objects
-
     builders = [DifBuilder()]
 
     difbuilder = builders[0]
@@ -411,9 +385,6 @@ def save(
                 else "NULL"
             )
 
-            # Debug
-            print((p1, p2, p3, uv1, uv2, uv3, n, material))
-
             if not flip:
                 difbuilder.add_triangle(p1, p2, p3, uv1, uv2, uv3, n, material)
                 tris += 1
@@ -445,35 +416,24 @@ def save(
             return object_instance.parent.original.visible_get()
         # For non-instanced objects we check visibility state of the original object.
         return object_instance.object.original.visible_get()
-    
-    def create_mesh_for_object_instance(object_instance):
-        if applymodifiers:
-            return object_instance.object.to_mesh()
-        else:
-            return object_instance.object.original.to_mesh()
 
-    #for ob in obs:
     for object_instance in depsgraph.object_instances:
         if exportselected:
             if not is_object_instance_selected(object_instance):
                 continue
         if exportvisible:
-            #if not ob.visible_get():
             if not is_object_instance_visible(object_instance):
                 continue
 
-        #ob_eval = ob.evaluated_get(depsgraph) if applymodifiers else ob
         ob_eval = object_instance.object if applymodifiers else object_instance.object.original
 
         dif_props = ob_eval.dif_props
-        #dif_props = object_instance.object.dif_props
 
         if dif_props.interior_type == "game_entity":
             game_entities.append(ob_eval)
 
         try:
             me = ob_eval.to_mesh()
-            #me = create_mesh_for_object_instance(object_instance)
         except RuntimeError:
             continue
 
@@ -493,10 +453,6 @@ def save(
 
     for (mp, curve) in mp_list:
         mp_difs.append(build_pathed_interior(mp, curve, off, flip, double))
-
-    #DEBUG
-    print("Generated tris:")
-    print(tris)
 
     if tris != 0:
         for i in range(0, len(builders)):
