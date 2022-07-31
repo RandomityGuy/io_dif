@@ -344,10 +344,6 @@ def save(
         nonlocal tris, difbuilder
 
         mesh_triangulate(mesh)
-        
-        print(mesh)
-        print(mesh.uv_layers)
-        print(mesh.uv_layers.items())
 
         mesh_verts = mesh.vertices
 
