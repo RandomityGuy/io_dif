@@ -411,7 +411,7 @@ def save(
     
     def is_object_instance_visible(object_instance):
         # For instanced objects we check visibility of their instancer (more accurately: check
-        # vsibility status of the original object corresponding to the instancer).
+        # visibility status of the original object corresponding to the instancer).
         if object_instance.parent:
             return object_instance.parent.original.visible_get()
         # For non-instanced objects we check visibility state of the original object.
