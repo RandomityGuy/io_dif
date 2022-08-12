@@ -225,6 +225,7 @@ def get_offset(depsgraph, applymodifiers=True):
                     minv[i] = vert.co[i]
                 if maxv[i] < vert.co[i]:
                     maxv[i] = vert.co[i]
+        ob_eval.to_mesh_clear()
 
     off = [((maxv[i] - minv[i]) / 2) + 50 for i in range(0, 3)]
     return off
@@ -289,6 +290,8 @@ def build_pathed_interior(ob: Object, marker_ob: Curve, offset, flip, double):
 
     for pt in marker_pts:
         marker_list.push_marker(pt.co, msToNext, initialPathPosition)
+
+    ob.to_mesh_clear()
 
     return (dif, marker_list)
 
@@ -431,6 +434,7 @@ def save(
         try:
             me = ob_eval.to_mesh()
         except RuntimeError:
+            print("Skipping mesh due to bad eval")
             continue
 
         if dif_props.interior_type == "static_interior":
@@ -438,9 +442,9 @@ def save(
             try:
                 save_mesh(ob_eval, me, off, flip, double)
             except:
-                print("Skipping mesh")
-                continue
+                print("Skipping mesh due to issue while saving")
             
+        ob_eval.to_mesh_clear()
 
         if dif_props.interior_type == "pathed_interior":
             mp_list.append((ob_eval, dif_props.marker_path))
