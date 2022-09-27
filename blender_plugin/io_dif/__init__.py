@@ -43,7 +43,7 @@ bl_info = {
     "author": "RandomityGuy",
     "description": "Dif import and export plugin for blender",
     "blender": (2, 80, 0),
-    "version": (1, 2, 4),
+    "version": (1, 2, 5),
     "location": "File > Import-Export",
     "warning": "",
     "category": "Import-Export",
