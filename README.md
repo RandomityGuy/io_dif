@@ -1,6 +1,7 @@
 # IO DIF
 
 Blender plugin to import and export MBG Torque DIF interiors and Torque Constructor CSX files.
+Supported Blender Versions: 2.8.0 to 3.3
 
 ## Note
 

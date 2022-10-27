@@ -123,7 +123,8 @@ def create_mesh(filepath, interior: Interior):
             interior.points[i].y,
             interior.points[i].z,
         ]
-        me.vertices[i].normal = [normals[i].x, normals[i].y, normals[i].z]
+        if bpy.app.version < (3, 1, 0):
+            me.vertices[i].normal = [normals[i].x, normals[i].y, normals[i].z]
 
     me.polygons.add(len(faces))
     me.loops.add(len(faces) * 3)
