@@ -347,41 +347,45 @@ def save(
 
         nonlocal tris, difbuilder
 
-        mesh_triangulate(mesh)
+        mesh.calc_loop_triangles()
+        mesh.calc_normals_split()
 
         mesh_verts = mesh.vertices
 
         active_uv_layer = mesh.uv_layers.active.data
 
-        for poly in mesh.polygons:
+        for tri_idx in mesh.loop_triangles:
+
+            tri: bpy.types.MeshLoopTriangle = tri_idx
 
             if tris > maxtricount:
                 tris = 0
                 builders.append(DifBuilder())
                 difbuilder = builders[-1]
 
-            rawp1 = mesh_verts[poly.vertices[0]].co
-            rawp2 = mesh_verts[poly.vertices[1]].co
-            rawp3 = mesh_verts[poly.vertices[2]].co
+            rawp1 = mesh_verts[tri.vertices[0]].co
+            rawp2 = mesh_verts[tri.vertices[1]].co
+            rawp3 = mesh_verts[tri.vertices[2]].co
 
             p1 = [rawp1[i] + offset[i] for i in range(0, 3)]
             p2 = [rawp2[i] + offset[i] for i in range(0, 3)]
             p3 = [rawp3[i] + offset[i] for i in range(0, 3)]
 
-            uv = [
-                active_uv_layer[l].uv[:]
-                for l in range(poly.loop_start, poly.loop_start + poly.loop_total)
-            ]
+            tri.loops[0]
+            # uv = [
+            #     active_uv_layer[l].uv[:]
+            #     for l in range(poly.loop_start, poly.loop_start + poly.loop_total)
+            # ]
 
-            uv1 = uv[0]
-            uv2 = uv[1]
-            uv3 = uv[2]
+            uv1 = active_uv_layer[tri.loops[0]].uv[:]
+            uv2 = active_uv_layer[tri.loops[1]].uv[:]
+            uv3 = active_uv_layer[tri.loops[2]].uv[:]
 
-            n = mesh_verts[poly.vertices[0]].normal
+            n = mesh.loops[tri.loops[0]].normal
 
             material = (
-                resolve_texture(mesh.materials[poly.material_index])
-                if poly.material_index != None
+                resolve_texture(mesh.materials[tri.material_index])
+                if tri.material_index != None
                 else "NULL"
             )
 
