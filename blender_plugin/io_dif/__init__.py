@@ -23,6 +23,7 @@ if "bpy" in locals():
         importlib.reload(import_csx)
 
 import os
+import platform
 import bpy
 from bpy.props import (
     BoolProperty,
@@ -311,9 +312,10 @@ def register():
     bpy.utils.register_class(InteriorKVP)
     bpy.utils.register_class(InteriorSettings)
 
-    dllpath = os.path.join(
-        os.path.dirname(os.path.realpath(__file__)), "DifBuilderLib.dll"
-    )
+    if platform.system() == "Windows":
+        dllpath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "DifBuilderLib.dll")
+    elif platform.system() == "Darwin":
+        dllpath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "DifBuilderLib.dylib")
     if not os.path.isfile(dllpath):
         raise Exception(
             "There was an error loading the necessary dll required for dif export. Please download the plugin from the proper location: https://github.com/RandomityGuy/io_dif/releases"

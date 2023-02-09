@@ -4,7 +4,7 @@
 #if _MSC_VER
 #define PLUGIN_API __declspec(dllexport)
 #else
-#define PLUGIN_API
+#define PLUGIN_API __attribute__((visibility("default")))
 #endif
 
 extern "C"
