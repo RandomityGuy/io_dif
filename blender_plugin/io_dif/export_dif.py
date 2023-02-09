@@ -3,13 +3,17 @@ from typing import Dict
 import bpy
 import ctypes
 import os
+import platform
 from pathlib import Path
 
 from bpy.types import Curve, Image, Material, Mesh, Object, ShaderNodeTexImage
 from bpy_extras.wm_utils.progress_report import ProgressReport, ProgressReportSubstep
 from mathutils import Quaternion, Vector
 
-dllpath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "DifBuilderLib.dll")
+if platform.system() == "Windows":
+    dllpath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "DifBuilderLib.dll")
+elif platform.system() == "Darwin":
+    dllpath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "DifBuilderLib.dylib")
 difbuilderlib = None
 try:
     difbuilderlib = ctypes.CDLL(dllpath)
