@@ -44,7 +44,7 @@ bl_info = {
     "author": "RandomityGuy",
     "description": "Dif import and export plugin for blender",
     "blender": (2, 80, 0),
-    "version": (1, 2, 7),
+    "version": (1, 2, 8),
     "location": "File > Import-Export",
     "warning": "",
     "category": "Import-Export",
@@ -313,9 +313,13 @@ def register():
     bpy.utils.register_class(InteriorSettings)
 
     if platform.system() == "Windows":
-        dllpath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "DifBuilderLib.dll")
+        dllpath = os.path.join(
+            os.path.dirname(os.path.realpath(__file__)), "DifBuilderLib.dll"
+        )
     elif platform.system() == "Darwin":
-        dllpath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "DifBuilderLib.dylib")
+        dllpath = os.path.join(
+            os.path.dirname(os.path.realpath(__file__)), "DifBuilderLib.dylib"
+        )
     if not os.path.isfile(dllpath):
         raise Exception(
             "There was an error loading the necessary dll required for dif export. Please download the plugin from the proper location: https://github.com/RandomityGuy/io_dif/releases"

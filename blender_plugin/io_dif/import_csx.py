@@ -311,7 +311,8 @@ def create_mesh(filepath, brush: CSXBrush):
     me.vertices.add(len(brush.vertices))
     for i in range(0, len(brush.vertices)):
         me.vertices[i].co = brush.vertices[i]
-        me.vertices[i].normal = normals[i]
+        if bpy.app.version < (3, 1, 0):
+            me.vertices[i].normal = [normals[i].x, normals[i].y, normals[i].z]
 
     me.polygons.add(len(faces))
     me.loops.add(len(faces) * 3)
@@ -342,27 +343,18 @@ def create_mesh(filepath, brush: CSXBrush):
     _, rotq, scale = transformmat.decompose()
     rot: mathutils.Quaternion = rotq
 
-    newmat = mathutils.Matrix.Rotation(
+    newmat = mathutils.Matrix(
+        ((scale.x, 0, 0, 0), (0, scale.y, 0, 0), (0, 0, scale.z, 0), (0, 0, 0, 1))
+    )
+    tmp = mathutils.Matrix.Rotation(
         rot.angle, 4, mathutils.Vector((rot.axis.x, rot.axis.y, rot.axis.z))
     )
-    newmat[0][0] *= scale.x
-    newmat[1][1] *= scale.y
-    newmat[2][2] *= scale.z
+
+    newmat = newmat @ tmp
+
     newmat[0][3] = transformmat[0][3]
     newmat[1][3] = transformmat[1][3]
     newmat[2][3] = transformmat[2][3]
-
-    newmat = mathutils.Matrix.Rotation(
-        brush.rot[3] * 3.14159265 / 180,
-        4,
-        mathutils.Vector((brush.rot[0], brush.rot[1], brush.rot[2])),
-    )
-    newmat[0][0] *= scale.x
-    newmat[1][1] *= scale.y
-    newmat[2][2] *= scale.z
-    newmat[0][3] = brush.pos[0]
-    newmat[1][3] = brush.pos[1]
-    newmat[2][3] = brush.pos[2]
 
     ob = bpy.data.objects.new("Object", me)
     ob.empty_display_type = "SINGLE_ARROW"
@@ -370,11 +362,11 @@ def create_mesh(filepath, brush: CSXBrush):
     # ob.matrix_world = [
     #     [brush.transform[4 * i + j] for j in range(0, 4)] for i in range(0, 4)
     # ]
-    ob.matrix_world = transformmat
-    ob.rotation_axis_angle = (rot.axis.x, rot.axis.y, rot.axis.z, rot.angle)
-    ob.rotation_mode = "AXIS_ANGLE"
-    ob.scale = (scale.x, scale.y, scale.z)
-    ob.location = [brush.transform[3], brush.transform[7], brush.transform[11]]
+    ob.matrix_world = newmat
+    # ob.rotation_axis_angle = (rot.axis.x, rot.axis.y, rot.axis.z, rot.angle)
+    # ob.rotation_mode = "AXIS_ANGLE"
+    # ob.scale = (scale.x, scale.y, scale.z)
+    # ob.location = [brush.transform[3], brush.transform[7], brush.transform[11]]
 
     return ob
 
