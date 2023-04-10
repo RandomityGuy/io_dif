@@ -14,9 +14,14 @@ endif()
 set(SOURCE_FILES DifBuilderLib.cpp)
 add_library(DifBuilderLib SHARED ${SOURCE_FILES})
 
-if (UNIX)
+if (UNIX AND APPLE)
     set_target_properties(DifBuilder PROPERTIES COMPILE_FLAGS "-O0") # Disable optimizations cause it breaks
     set_target_properties(DifBuilderLib PROPERTIES COMPILE_FLAGS "-O0")
+    set_target_properties(DifBuilderLib PROPERTIES PREFIX "")
+elseif (UNIX AND NOT APPLE)
+    set_target_properties(Dif PROPERTIES COMPILE_FLAGS "-O0 -fPIC")
+    set_target_properties(DifBuilder PROPERTIES COMPILE_FLAGS "-O0 -fPIC") # Disable optimizations cause it breaks
+    set_target_properties(DifBuilderLib PROPERTIES COMPILE_FLAGS "-O0 -fPIC")
     set_target_properties(DifBuilderLib PROPERTIES PREFIX "")
 else ()
     set_target_properties(DifBuilder PROPERTIES COMPILE_FLAGS "/Od /Ob0") # Disable optimizations cause it breaks
