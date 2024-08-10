@@ -30,7 +30,7 @@ def create_material(filepath, matname):
         texslot = mat.node_tree.nodes.new("ShaderNodeTexImage")
         texslot.name = matname
         texslot.image = teximg
-        mat.node_tree.nodes["Principled BSDF"].inputs["Specular"].default_value = 0
+        mat.node_tree.nodes["Principled BSDF"].inputs["Roughness"].default_value = 1.0
         mat.node_tree.links.new(
             mat.node_tree.nodes["Principled BSDF"].inputs["Base Color"],
             texslot.outputs["Color"],
@@ -46,7 +46,9 @@ def create_mesh(filepath, interior: Interior):
     """
     me = bpy.data.meshes.new("Mesh")
 
+    face_data = []
     faces = []
+    tex_index = []
 
     normals = []
     tex_coords = []
@@ -109,41 +111,70 @@ def create_mesh(filepath, interior: Interior):
             normals.append(normal)
             tex_coords.append(coord2)
 
-            faces.append(
-                (
-                    (len(indices) - 3, len(indices) - 2, len(indices) - 1),
-                    surface.textureIndex,
+            if bpy.app.version < (4, 0, 0):
+                faces.append(
+                    (
+                        (len(indices) - 3, len(indices) - 2, len(indices) - 1),
+                        surface.textureIndex,
+                    )
                 )
-            )
+            else:
+                face_data.append((len(indices) - 3, len(indices) - 2, len(indices) - 1))
+                faces.append((indices[-3][0], indices[-2][0], indices[-1][0]))
+                tex_index.append(surface.textureIndex)
 
-    me.vertices.add(len(interior.points))
-    for i in range(0, len(interior.points)):
-        me.vertices[i].co = [
-            interior.points[i].x,
-            interior.points[i].y,
-            interior.points[i].z,
-        ]
-        if bpy.app.version < (3, 1, 0):
-            me.vertices[i].normal = [normals[i].x, normals[i].y, normals[i].z]
+    if bpy.app.version < (4, 0, 0):
+        me.vertices.add(len(interior.points))
+        for i in range(0, len(interior.points)):
+            me.vertices[i].co = [
+                interior.points[i].x,
+                interior.points[i].y,
+                interior.points[i].z,
+            ]
+            if bpy.app.version < (3, 1, 0):
+                me.vertices[i].normal = [normals[i].x, normals[i].y, normals[i].z]
 
-    me.polygons.add(len(faces))
-    me.loops.add(len(faces) * 3)
+        me.polygons.add(len(faces))
+        me.loops.add(len(faces) * 3)
+        
+        me.uv_layers.new()
+        uvs = me.uv_layers[0]
+        
+        for i, ((verts, material), poly) in enumerate(zip(faces, me.polygons)):
+            poly.loop_total = 3
+            poly.loop_start = i * 3
 
-    me.uv_layers.new()
-    uvs = me.uv_layers[0]
+            poly.material_index = material
 
-    for i, ((verts, material), poly) in enumerate(zip(faces, me.polygons)):
-        poly.loop_total = 3
-        poly.loop_start = i * 3
-
-        poly.material_index = material
-
-        for j, index in zip(poly.loop_indices, verts):
-            me.loops[j].vertex_index = indices[index][0]
-            uvs.data[j].uv = (
-                tex_coords[indices[index][1]][0],
-                tex_coords[indices[index][1]][1],
-            )
+            for j, index in zip(poly.loop_indices, verts):
+                me.loops[j].vertex_index = indices[index][0]
+                uvs.data[j].uv = (
+                    tex_coords[indices[index][1]][0],
+                    tex_coords[indices[index][1]][1],
+                )
+    else:
+        verts = []
+        for point in interior.points:
+            verts.append((point.x, point.y, point.z))
+        
+        me.from_pydata(verts, [], faces)
+        
+        # Create a new UV map if it doesn't exist
+        if not me.uv_layers:
+            me.uv_layers.new()
+        
+        uv_layer = me.uv_layers.active.data
+        
+        for i, poly in enumerate(me.polygons):
+            poly.material_index = tex_index[i]
+            face_index = poly.index
+            
+            for j, loop_index in enumerate(poly.loop_indices):
+                face_vert_index = face_data[face_index][j]
+                index_data = indices[face_vert_index]
+                loop = me.loops[loop_index]
+                
+                uv_layer[loop.index].uv = tex_coords[index_data[2]]
 
     me.validate()
     me.update()

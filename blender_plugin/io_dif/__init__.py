@@ -185,7 +185,7 @@ class ImportDIF(bpy.types.Operator, ImportHelper):
     bl_options = {"PRESET"}
 
     filename_ext = ".dif"
-    filter_glob = StringProperty(
+    filter_glob: StringProperty(
         default="*.dif",
         options={"HIDDEN"},
     )
