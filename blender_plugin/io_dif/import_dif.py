@@ -39,6 +39,19 @@ def create_material(filepath, matname):
     return mat
 
 
+def fix_indices(indices: list[int]):
+    new_indices = [0] * len(indices)
+    for i in range(len(indices)):
+        if i >= 2:
+            if i % 2 == 0:
+                new_indices[len(indices) - 1 - (i - 2) // 2] = indices[i]
+            else:
+                new_indices[(i + 1) // 2] = indices[i]
+        else:
+            new_indices[i] = indices[i]
+    return new_indices
+
+
 def create_mesh(filepath, interior: Interior):
     """
     :param Interior interior:
@@ -46,75 +59,8 @@ def create_mesh(filepath, interior: Interior):
     """
     me = bpy.data.meshes.new("Mesh")
 
-    faces = []
-
-    normals = []
-    tex_coords = []
-
-    indices = []
-
     for mat in interior.materialList:
         me.materials.append(create_material(filepath, mat))
-
-    for surface in interior.surfaces:
-        for i in range(0, surface.windingCount - 2):
-            if i % 2 == 0:
-                index0 = interior.windings[i + surface.windingStart + 2]
-                index1 = interior.windings[i + surface.windingStart + 1]
-                index2 = interior.windings[i + surface.windingStart]
-            else:
-                index0 = interior.windings[i + surface.windingStart]
-                index1 = interior.windings[i + surface.windingStart + 1]
-                index2 = interior.windings[i + surface.windingStart + 2]
-
-            plane_flipped = surface.planeFlipped
-            normal_index = interior.planes[surface.planeIndex & ~0x8000].normalIndex
-            tex_gen = interior.texGenEQs[surface.texGenIndex]
-
-            normal = interior.normals[normal_index]
-            if plane_flipped:
-                normal.x *= -1
-                normal.y *= -1
-                normal.z *= -1
-
-            pt0 = interior.points[index0]
-            pt1 = interior.points[index1]
-            pt2 = interior.points[index2]
-
-            def plane_to_uv(pt, plane):
-                return pt.x * plane.x + pt.y * plane.y + pt.z * plane.z + plane.d
-
-            coord0 = [
-                plane_to_uv(pt0, tex_gen.planeX),
-                -plane_to_uv(pt0, tex_gen.planeY),
-            ]
-            coord1 = [
-                plane_to_uv(pt1, tex_gen.planeX),
-                -plane_to_uv(pt1, tex_gen.planeY),
-            ]
-            coord2 = [
-                plane_to_uv(pt2, tex_gen.planeX),
-                -plane_to_uv(pt2, tex_gen.planeY),
-            ]
-
-            indices.append((index0, len(normals), len(tex_coords)))
-            normals.append(normal)
-            tex_coords.append(coord0)
-
-            indices.append((index1, len(normals), len(tex_coords)))
-            normals.append(normal)
-            tex_coords.append(coord1)
-
-            indices.append((index2, len(normals), len(tex_coords)))
-            normals.append(normal)
-            tex_coords.append(coord2)
-
-            faces.append(
-                (
-                    (len(indices) - 3, len(indices) - 2, len(indices) - 1),
-                    surface.textureIndex,
-                )
-            )
 
     me.vertices.add(len(interior.points))
     for i in range(0, len(interior.points)):
@@ -123,29 +69,65 @@ def create_mesh(filepath, interior: Interior):
             interior.points[i].y,
             interior.points[i].z,
         ]
-        if bpy.app.version < (3, 1, 0):
-            me.vertices[i].normal = [normals[i].x, normals[i].y, normals[i].z]
 
-    me.polygons.add(len(faces))
-    me.loops.add(len(faces) * 3)
+    surfaces: list[Surface] = interior.surfaces
+
+    me.polygons.add(len(surfaces))
+
+    loop_count = 0
+    for surf in surfaces:
+        loop_count += surf.windingCount
+
+    me.loops.add(loop_count)
+
+    surface_uvs = {}
+    cur_loop_idx = 0
+
+    for (i, surface) in enumerate(surfaces):
+        surf_indices = interior.windings[
+            surface.windingStart : (surface.windingStart + surface.windingCount)
+        ]
+
+        surf_indices = fix_indices(surf_indices)
+
+        plane_flipped = surface.planeFlipped
+        normal_index = interior.planes[surface.planeIndex & ~0x8000].normalIndex
+        tex_gen = interior.texGenEQs[surface.texGenIndex]
+
+        normal = interior.normals[normal_index]
+        if plane_flipped:
+            normal.x *= -1
+            normal.y *= -1
+            normal.z *= -1
+
+        polygon = me.polygons[i]
+        polygon.loop_start = cur_loop_idx
+        polygon.loop_total = len(surf_indices)
+        cur_loop_idx += polygon.loop_total
+        polygon.material_index = surface.textureIndex
+
+        def plane_to_uv(pt, plane):
+            return pt.x * plane.x + pt.y * plane.y + pt.z * plane.z + plane.d
+
+        for j, index in enumerate(surf_indices):
+            me.loops[j + polygon.loop_start].vertex_index = index
+            me.loops[j + polygon.loop_start].normal = (normal.x, normal.y, normal.z)
+
+            pt = interior.points[index]
+
+            uv = (
+                plane_to_uv(pt, tex_gen.planeX),
+                -plane_to_uv(pt, tex_gen.planeY),
+            )
+            surface_uvs[j + polygon.loop_start] = uv
 
     me.uv_layers.new()
     uvs = me.uv_layers[0]
 
-    for i, ((verts, material), poly) in enumerate(zip(faces, me.polygons)):
-        poly.loop_total = 3
-        poly.loop_start = i * 3
+    for loop_idx in surface_uvs:
+        uvs.data[loop_idx].uv = surface_uvs[loop_idx]
 
-        poly.material_index = material
-
-        for j, index in zip(poly.loop_indices, verts):
-            me.loops[j].vertex_index = indices[index][0]
-            uvs.data[j].uv = (
-                tex_coords[indices[index][1]][0],
-                tex_coords[indices[index][1]][1],
-            )
-
-    me.validate()
+    me.validate(verbose=True)
     me.update()
 
     ob = bpy.data.objects.new("Object", me)
