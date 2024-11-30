@@ -1,7 +1,4 @@
-import array
 import math
-import os
-import time
 from typing import Tuple
 import bpy
 from bpy.props import CollectionProperty
@@ -233,7 +230,10 @@ def create_material(filepath, matname):
         texslot = mat.node_tree.nodes.new("ShaderNodeTexImage")
         texslot.name = matname
         texslot.image = teximg
-        mat.node_tree.nodes["Principled BSDF"].inputs["Specular"].default_value = 0
+        if bpy.app.version < (4, 0, 0):
+            mat.node_tree.nodes["Principled BSDF"].inputs["Specular"].default_value = 0
+        else:
+            mat.node_tree.nodes["Principled BSDF"].inputs["Roughness"].default_value = 1.0
         mat.node_tree.links.new(
             mat.node_tree.nodes["Principled BSDF"].inputs["Base Color"],
             texslot.outputs["Color"],
@@ -256,56 +256,84 @@ def create_mesh(filepath, brush: CSXBrush):
     """
     me = bpy.data.meshes.new("Mesh")
 
-    faces = []
-
-    tex_coords = []
-
-    indices = []
-
     materials = list(set(x.material for x in brush.faces))
-
-    me.vertices.add(len(brush.vertices))
-    for i in range(0, len(brush.vertices)):
-        me.vertices[i].co = brush.vertices[i]
-
-    me.polygons.add(len(brush.faces))
-    tot_loops = 0
-    for face in brush.faces:
-        tot_loops += len(face.indices)
-
-    me.loops.add(tot_loops)
-
-    surface_uvs = {}
-    cur_loop_idx = 0
 
     for mat in materials:
         me.materials.append(create_material(filepath, mat))
 
-    for (i, face) in enumerate(brush.faces):
-        tex_gen = face.texgen
+    if bpy.app.version < (4, 0, 0):
+        me.vertices.add(len(brush.vertices))
+        for i in range(0, len(brush.vertices)):
+            me.vertices[i].co = brush.vertices[i]
 
-        normal = face.plane[:3]
+        me.polygons.add(len(brush.faces))
+        tot_loops = 0
+        for face in brush.faces:
+            tot_loops += len(face.indices)
 
-        polygon = me.polygons[i]
-        polygon.loop_start = cur_loop_idx
-        polygon.loop_total = len(face.indices)
-        cur_loop_idx += polygon.loop_total
-        polygon.material_index = materials.index(face.material)
+        me.loops.add(tot_loops)
 
-        for j, index in enumerate(face.indices):
-            me.loops[j + polygon.loop_start].vertex_index = index
-            me.loops[j + polygon.loop_start].normal = normal
+        surface_uvs = {}
+        cur_loop_idx = 0
 
-            pt = brush.vertices[index]
+        for (i, face) in enumerate(brush.faces):
+            tex_gen = face.texgen
 
-            uv = tex_gen.compute_uv(pt, face.texSize)
-            surface_uvs[j + polygon.loop_start] = uv
+            normal = face.plane[:3]
 
-    me.uv_layers.new()
-    uvs = me.uv_layers[0]
+            polygon = me.polygons[i]
+            polygon.loop_start = cur_loop_idx
+            polygon.loop_total = len(face.indices)
+            cur_loop_idx += polygon.loop_total
+            polygon.material_index = materials.index(face.material)
 
-    for loop_idx in surface_uvs:
-        uvs.data[loop_idx].uv = surface_uvs[loop_idx]
+            for j, index in enumerate(face.indices):
+                me.loops[j + polygon.loop_start].vertex_index = index
+                me.loops[j + polygon.loop_start].normal = normal
+
+                pt = brush.vertices[index]
+
+                uv = tex_gen.compute_uv(pt, face.texSize)
+                surface_uvs[j + polygon.loop_start] = uv
+
+        me.uv_layers.new()
+        uvs = me.uv_layers[0]
+
+        for loop_idx in surface_uvs:
+            uvs.data[loop_idx].uv = surface_uvs[loop_idx]
+    else:
+        verts = []
+        faces = []
+        face_texs = []
+        face_uvs = []
+        for vert in brush.vertices:
+            verts.append(vert)
+
+        for face in brush.faces:
+            face_verts = []
+            for index in face.indices:
+                face_verts.append(index)
+            faces.append(face_verts)
+            face_texs.append(face.material)
+            uvs = []
+            for i in range(0, len(face.indices)):
+                uvs.append(face.texgen.compute_uv(verts[face.indices[i]], face.texSize))
+            face_uvs.append(uvs)
+
+        me.from_pydata(verts, [], faces)
+
+        if not me.uv_layers:
+            me.uv_layers.new()
+
+        uv_layer = me.uv_layers.active.data
+
+        for i, poly in enumerate(me.polygons):
+            p: bpy.types.MeshPolygon = poly
+            p.material_index = materials.index(face_texs[i])
+            
+            for j, loop_index in enumerate(p.loop_indices):
+                loop = me.loops[loop_index]
+                uv_layer[loop.index].uv = face_uvs[i][j]
 
     me.validate()
     me.update()

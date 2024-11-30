@@ -30,7 +30,10 @@ def create_material(filepath, matname):
         texslot = mat.node_tree.nodes.new("ShaderNodeTexImage")
         texslot.name = matname
         texslot.image = teximg
-        mat.node_tree.nodes["Principled BSDF"].inputs["Specular"].default_value = 0
+        if bpy.app.version < (4, 0, 0):
+            mat.node_tree.nodes["Principled BSDF"].inputs["Specular"].default_value = 0
+        else:
+            mat.node_tree.nodes["Principled BSDF"].inputs["Roughness"].default_value = 1.0
         mat.node_tree.links.new(
             mat.node_tree.nodes["Principled BSDF"].inputs["Base Color"],
             texslot.outputs["Color"],
@@ -62,70 +65,132 @@ def create_mesh(filepath, interior: Interior):
     for mat in interior.materialList:
         me.materials.append(create_material(filepath, mat))
 
-    me.vertices.add(len(interior.points))
-    for i in range(0, len(interior.points)):
-        me.vertices[i].co = [
-            interior.points[i].x,
-            interior.points[i].y,
-            interior.points[i].z,
-        ]
-
     surfaces: list[Surface] = interior.surfaces
 
-    me.polygons.add(len(surfaces))
+    if bpy.app.version < (4, 0, 0):
+        me.vertices.add(len(interior.points))
+        for i in range(0, len(interior.points)):
+            me.vertices[i].co = [
+                interior.points[i].x,
+                interior.points[i].y,
+                interior.points[i].z,
+            ]
 
-    loop_count = 0
-    for surf in surfaces:
-        loop_count += surf.windingCount
+        me.polygons.add(len(surfaces))
 
-    me.loops.add(loop_count)
+        loop_count = 0
+        for surf in surfaces:
+            loop_count += surf.windingCount
 
-    surface_uvs = {}
-    cur_loop_idx = 0
+        me.loops.add(loop_count)
 
-    for (i, surface) in enumerate(surfaces):
-        surf_indices = interior.windings[
-            surface.windingStart : (surface.windingStart + surface.windingCount)
-        ]
+        surface_uvs = {}
+        cur_loop_idx = 0
 
-        surf_indices = fix_indices(surf_indices)
+        for (i, surface) in enumerate(surfaces):
+            surf_indices = interior.windings[
+                surface.windingStart : (surface.windingStart + surface.windingCount)
+            ]
 
-        plane_flipped = surface.planeFlipped
-        normal_index = interior.planes[surface.planeIndex & ~0x8000].normalIndex
-        tex_gen = interior.texGenEQs[surface.texGenIndex]
+            surf_indices = fix_indices(surf_indices)
 
-        normal = interior.normals[normal_index]
-        if plane_flipped:
-            normal.x *= -1
-            normal.y *= -1
-            normal.z *= -1
+            plane_flipped = surface.planeFlipped
+            normal_index = interior.planes[surface.planeIndex & ~0x8000].normalIndex
+            tex_gen = interior.texGenEQs[surface.texGenIndex]
 
-        polygon = me.polygons[i]
-        polygon.loop_start = cur_loop_idx
-        polygon.loop_total = len(surf_indices)
-        cur_loop_idx += polygon.loop_total
-        polygon.material_index = surface.textureIndex
+            normal = interior.normals[normal_index]
+            if plane_flipped:
+                normal.x *= -1
+                normal.y *= -1
+                normal.z *= -1
 
-        def plane_to_uv(pt, plane):
-            return pt.x * plane.x + pt.y * plane.y + pt.z * plane.z + plane.d
+            polygon = me.polygons[i]
+            polygon.loop_start = cur_loop_idx
+            polygon.loop_total = len(surf_indices)
+            cur_loop_idx += polygon.loop_total
+            polygon.material_index = surface.textureIndex
 
-        for j, index in enumerate(surf_indices):
-            me.loops[j + polygon.loop_start].vertex_index = index
-            me.loops[j + polygon.loop_start].normal = (normal.x, normal.y, normal.z)
+            def plane_to_uv(pt, plane):
+                return pt.x * plane.x + pt.y * plane.y + pt.z * plane.z + plane.d
 
-            pt = interior.points[index]
+            for j, index in enumerate(surf_indices):
+                me.loops[j + polygon.loop_start].vertex_index = index
+                me.loops[j + polygon.loop_start].normal = (normal.x, normal.y, normal.z)
 
-            uv = (
-                plane_to_uv(pt, tex_gen.planeX),
-                -plane_to_uv(pt, tex_gen.planeY),
-            )
-            surface_uvs[j + polygon.loop_start] = uv
+                pt = interior.points[index]
 
-    me.uv_layers.new()
-    uvs = me.uv_layers[0]
+                uv = (
+                    plane_to_uv(pt, tex_gen.planeX),
+                    -plane_to_uv(pt, tex_gen.planeY),
+                )
+                surface_uvs[j + polygon.loop_start] = uv
 
-    for loop_idx in surface_uvs:
-        uvs.data[loop_idx].uv = surface_uvs[loop_idx]
+        me.uv_layers.new()
+        uvs = me.uv_layers[0]
+
+        for loop_idx in surface_uvs:
+            uvs.data[loop_idx].uv = surface_uvs[loop_idx]
+    else:
+        mesh_verts = []
+        for i in range(0, len(interior.points)):
+            mesh_verts.append((interior.points[i].x, interior.points[i].y, interior.points[i].z))
+
+        mesh_faces = []
+        face_texs = []
+        face_uvs = []
+        cur_loop_idx = 0
+
+        for (i, surface) in enumerate(surfaces):
+            surf_indices = interior.windings[
+                surface.windingStart : (surface.windingStart + surface.windingCount)
+            ]
+
+            surf_indices = fix_indices(surf_indices)
+
+            plane_flipped = surface.planeFlipped
+            normal_index = interior.planes[surface.planeIndex & ~0x8000].normalIndex
+            tex_gen = interior.texGenEQs[surface.texGenIndex]
+
+            normal = interior.normals[normal_index]
+            if plane_flipped:
+                normal.x *= -1
+                normal.y *= -1
+                normal.z *= -1
+
+            polygon = surf_indices
+            cur_loop_idx += len(surf_indices)
+            mesh_faces.append(polygon)
+
+            face_texs.append(surface.textureIndex)
+
+            def plane_to_uv(pt, plane):
+                return pt.x * plane.x + pt.y * plane.y + pt.z * plane.z + plane.d
+
+            face_uv = []
+            for j, index in enumerate(surf_indices):
+                pt = interior.points[index]
+
+                uv = (
+                    plane_to_uv(pt, tex_gen.planeX),
+                    -plane_to_uv(pt, tex_gen.planeY),
+                )
+                face_uv.append(uv)
+            face_uvs.append(face_uv)
+
+        me.from_pydata(mesh_verts, [], mesh_faces)
+
+        if not me.uv_layers:
+            me.uv_layers.new()
+
+        uv_layer = me.uv_layers.active.data
+
+        for i, poly in enumerate(me.polygons):
+            p: bpy.types.MeshPolygon = poly
+            p.material_index = face_texs[i]
+            
+            for j, loop_index in enumerate(p.loop_indices):
+                loop = me.loops[loop_index]
+                uv_layer[loop.index].uv = face_uvs[i][j]
 
     me.validate(verbose=True)
     me.update()

@@ -332,6 +332,7 @@ def save(
     applymodifiers=True,
     exportvisible=True,
     exportselected=False,
+    usematnames=False,
 ):
     import bpy
     import bmesh
@@ -352,7 +353,8 @@ def save(
         nonlocal tris, difbuilder
 
         mesh.calc_loop_triangles()
-        mesh.calc_normals_split()
+        if bpy.app.version < (4, 0, 0):
+            mesh.calc_normals_split()
 
         mesh_verts = mesh.vertices
 
@@ -388,7 +390,7 @@ def save(
             n = mesh.loops[tri.loops[0]].normal
 
             material = (
-                resolve_texture(mesh.materials[tri.material_index])
+                mesh.materials[tri.material_index].name if usematnames else resolve_texture(mesh.materials[tri.material_index])
                 if tri.material_index != None
                 else "NULL"
             )
@@ -433,6 +435,7 @@ def save(
             else bpy.context.scene.objects
         )
         for ob in obs:
+            ob: Object = ob
             if exportvisible:
                 if not ob.visible_get():
                     continue

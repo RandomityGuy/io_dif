@@ -44,7 +44,7 @@ bl_info = {
     "author": "RandomityGuy",
     "description": "Dif import and export plugin for blender",
     "blender": (2, 80, 0),
-    "version": (1, 2, 9),
+    "version": (1, 2, 10),
     "location": "File > Import-Export",
     "warning": "",
     "category": "Import-Export",
@@ -147,7 +147,7 @@ class ImportCSX(bpy.types.Operator, ImportHelper):
     bl_options = {"PRESET"}
 
     filename_ext = ".csx"
-    filter_glob = StringProperty(
+    filter_glob: StringProperty(
         default="*.csx",
         options={"HIDDEN"},
     )
@@ -185,7 +185,7 @@ class ImportDIF(bpy.types.Operator, ImportHelper):
     bl_options = {"PRESET"}
 
     filename_ext = ".dif"
-    filter_glob = StringProperty(
+    filter_glob: StringProperty(
         default="*.dif",
         options={"HIDDEN"},
     )
@@ -266,6 +266,12 @@ class ExportDIF(bpy.types.Operator, ExportHelper):
         default=False,
     )
 
+    usematnames: BoolProperty(
+        name="Use Material Names",
+        description="Use material names instead of material texture file names",
+        default=False,
+    )
+
     check_extension = True
 
     def execute(self, context):
@@ -281,6 +287,7 @@ class ExportDIF(bpy.types.Operator, ExportHelper):
             keywords.get("applymodifiers", True),
             keywords.get("exportvisible", True),
             keywords.get("exportselected", False),
+            keywords.get("usematnames", False),
         )
         return {"FINISHED"}
 
