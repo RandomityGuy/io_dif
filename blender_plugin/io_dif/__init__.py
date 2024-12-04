@@ -416,6 +416,10 @@ def register():
         dllpath = os.path.join(
             os.path.dirname(os.path.realpath(__file__)), "DifBuilderLib.dylib"
         )
+    elif platform.system() == "Linux":
+        dllpath = os.path.join(
+            os.path.dirname(os.path.realpath(__file__)), "DifBuilderLib.so"
+        )
     if not os.path.isfile(dllpath):
         raise Exception(
             "There was an error loading the necessary dll required for dif export. Please download the plugin from the proper location: https://github.com/RandomityGuy/io_dif/releases"
