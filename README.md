@@ -1,7 +1,7 @@
 # IO DIF
 
 Blender plugin to import and export MBG Torque DIF interiors and Torque Constructor CSX files.
-Supported Blender Versions: 2.8.0 to 3.3
+Supported Blender Versions: 2.8.0 to 4.3
 
 ## Note
 
@@ -44,10 +44,26 @@ If you want to load a Torque Constructor (.csx) file and create a Torque DIF, us
 
 File > Export > Torque (.dif)
 
-#### Additional export options
+#### Additional export options - Important!
 
-Flip Faces: Flip the normals of the dif, incase the resultant dif is inside out.  
-Double Faces: Make all the faces double sided, may increase lag during collision detection.
+- Flip Faces: Flip the normals of the dif, incase the resultant dif is inside out.  
+- Double Faces: Make all the faces double sided, may increase lag during collision detection.  
+- Max Polygons: Number of maximum triangles that a DIF can have before  splitting into multiple DIFs. Reduce this number if export fails.  
+- Apply Modifiers: Whether to apply modifiers to meshes before  exporting.  
+- Export Visible: Export only visible geometry.  
+- Export Selected: Export only selected geometry.  
+- Use Material Names: Use Material Names instead of file names of the material textures.  
+- Optimize For Marble Blast: Make the resultant DIF optimized for Marble Blast. Uncheck this if you want to use this for other Torque games.  
+- BSP Algorithm:
+  - Fast (Default): Use a sampling algorithm to determine the best splitter. This method is inherently random and may not always yield optimal results.  
+  - Exhaustive: Use an exhaustive search algorithm to determine the best splitter. May take longer but builds more balanced trees. Deterministic algorithm.  
+  - None: Do not build a BSP Tree, utilize this for fast conversion times or if building the BSP Tree fails/hangs on export.
+  - IMPORTANT: If your geometry is too complex, consider using None mode as there is no guarantee that a BSP Tree can be optimally built within set constraints.
+  - IMPORTANT: BSP Trees are only used for Raycasts and Drop To Ground feature in Marble Blast. If you are not using these features, you can safely disable the BSP Tree.
+- Point Epsilon: The minimum distance between two points to be considered different.  
+- Plane Epsilon: Minimum difference between values of two plane to be considered equal.  
+- Split Epsilon: Minimum difference between values of two splitting planes to be considered equal.  
+
 
 ### DIF Properties Panel
 
@@ -68,7 +84,6 @@ Located in the object properties panel
 
 - No Trigger support: I tried but Torque was being Torque even when I successfully embedded them into difs.
 - No Game Entity rotation support: there isnt even a rotation field for Game Entities in difs, and torque doesnt even use the rotation field explicitly passed as a property
-- Rarely the Torque Constructor CSX import will incorrectly rotate brushes.
 
 ## Previews
 
@@ -82,16 +97,13 @@ Checkout the repository correctly
 
 ```
 git checkout https://github.com/RandomityGuy/io_dif.git
-git submodule init
-git submodule update
-git submodule foreach git submodule init
-git submodule foreach git submodule update
+cd rust/difbuilder
+cargo build --release
 ```
 
-Then build DifBuilderLib.dll using CMake.  
-Copy resultant DifBuilderLib.dll to blender_plugin/io_dif folder.  
+Copy resultant difbuilder.dll to blender_plugin/io_dif folder and rename it to DifBuilderLib.dll  
 Copy blender_plugin/io_dif to your blender plugins folder.
 
 ## Credits
 
-Thanks HiGuy for your incomplete blender dif import plugin
+Thanks HiGuy for your incomplete blender dif import plugin as well as the Rust dif library.
