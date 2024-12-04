@@ -1,0 +1,27 @@
+name: Rust
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Build
+      run: cd rust/difbuilder && cargo build --release
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: DifBuilderLib
+        path: |
+          ${{github.workspace}}/rust/difbuilder/target/release/difbuilder.dylib
