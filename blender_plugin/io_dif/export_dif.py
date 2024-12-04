@@ -1,5 +1,7 @@
 from os.path import join
+import re
 from typing import Dict
+from . import set_progress, stop_progress
 import bpy
 import ctypes
 import os
@@ -22,6 +24,8 @@ except:
         "There was an error loading the necessary dll required for dif export. Please download the plugin from the proper location: https://github.com/RandomityGuy/io_dif/releases"
     )
 
+STATUSFN = ctypes.CFUNCTYPE(None, ctypes.c_bool, ctypes.c_uint32, ctypes.c_uint32, ctypes.c_char_p, ctypes.c_char_p)
+
 difbuilderlib.new_difbuilder.restype = ctypes.c_void_p
 difbuilderlib.dispose_difbuilder.argtypes = [ctypes.c_void_p]
 difbuilderlib.add_triangle.argtypes = [
@@ -35,7 +39,7 @@ difbuilderlib.add_triangle.argtypes = [
     ctypes.POINTER(ctypes.c_float),
     ctypes.c_char_p,
 ]
-difbuilderlib.build.argtypes = [ctypes.c_void_p]
+difbuilderlib.build.argtypes = [ctypes.c_void_p, ctypes.c_bool, ctypes.c_int32, ctypes.c_float, ctypes.c_float, ctypes.c_float, STATUSFN]
 difbuilderlib.build.restype = ctypes.c_void_p
 
 difbuilderlib.dispose_dif.argtypes = [ctypes.c_void_p]
@@ -77,11 +81,20 @@ difbuilderlib.add_trigger.argtypes = [
     ctypes.c_void_p,
 ]
 
+current_status = (False, 0, 0, "", "")
+
+def update_status(stop, current, total, status, finish_status):
+    global current_status
+    current_status = (stop, current, total, status.decode('utf-8'), finish_status.decode('utf-8'))
+    set_progress(current / total if total != 0 else 1, status.decode('utf-8'))
+    if stop:
+        stop_progress()
+
+update_status_c = STATUSFN(update_status)
 
 scene = bpy.context.scene
 
 obj = bpy.context.active_object
-
 
 class MarkerList:
     def __init__(self):
@@ -182,8 +195,8 @@ class DifBuilder:
             props.__ptr__,
         )
 
-    def build(self):
-        return Dif(difbuilderlib.build(self.__ptr__))
+    def build(self, mbonly, bspmode, pointepsilon, planeepsilon, splitepsilon):
+        return Dif(difbuilderlib.build(self.__ptr__, mbonly, bspmode, pointepsilon, planeepsilon, splitepsilon, update_status_c))
 
 
 def mesh_triangulate(me):
@@ -196,7 +209,12 @@ def mesh_triangulate(me):
     bm.free()
 
 
-def resolve_texture(mat: Material):
+def resolve_texture(mat: Material, usematnames: bool):
+    if usematnames:
+        matname = mat.name
+        # Strip off the .\d+ extension
+        matname = re.sub(r"\.\d+$", "", matname)
+        return matname
     img: ShaderNodeTexImage = None
     for n in mat.node_tree.nodes:
         if n.type == "TEX_IMAGE":
@@ -204,7 +222,10 @@ def resolve_texture(mat: Material):
             break
 
     if img == None:
-        return mat.name
+        matname = mat.name
+        # Strip off the .\d+ extension
+        matname = re.sub(r"\.\d+$", "", matname)
+        return matname
 
     return Path(img.image.filepath).stem
 
@@ -236,7 +257,7 @@ def get_offset(depsgraph, applymodifiers=True):
     return off
 
 
-def build_pathed_interior(ob: Object, marker_ob: Curve, offset, flip, double):
+def build_pathed_interior(ob: Object, marker_ob: Curve, offset, flip, double, usematnames, mbonly=True, bspmode="Fast", pointepsilon=1e-6, planeepsilon=1e-5, splitepsilon=1e-4):
     difbuilder = DifBuilder()
     mesh = ob.to_mesh()
     mesh_triangulate(mesh)
@@ -267,7 +288,7 @@ def build_pathed_interior(ob: Object, marker_ob: Curve, offset, flip, double):
         n = mesh_verts[poly.vertices[0]].normal
 
         material = (
-            resolve_texture(mesh.materials[poly.material_index])
+            resolve_texture(mesh.materials[poly.material_index], usematnames)
             if poly.material_index != None
             else "NULL"
         )
@@ -281,7 +302,15 @@ def build_pathed_interior(ob: Object, marker_ob: Curve, offset, flip, double):
             if double:
                 difbuilder.add_triangle(p1, p2, p3, uv1, uv2, uv3, n, material)
 
-    dif = difbuilder.build()
+    bspvalue = None
+    if bspmode == "Fast":
+        bspvalue = 0
+    elif bspmode == "Exhaustive":
+        bspvalue = 1
+    else:
+        bspvalue = 2
+
+    dif = difbuilder.build(mbonly, bspvalue, pointepsilon, planeepsilon, splitepsilon)
 
     marker_pts = (
         marker_ob.splines[0].bezier_points
@@ -333,6 +362,11 @@ def save(
     exportvisible=True,
     exportselected=False,
     usematnames=False,
+    mbonly=True,
+    bspmode="Fast",
+    pointepsilon=1e-6,
+    planeepsilon=1e-5,
+    splitepsilon=1e-4
 ):
     import bpy
     import bmesh
@@ -358,7 +392,10 @@ def save(
 
         mesh_verts = mesh.vertices
 
-        active_uv_layer = mesh.uv_layers.active.data
+        if mesh.uv_layers != None and mesh.uv_layers.active != None:
+            active_uv_layer = mesh.uv_layers.active.data
+        else:
+            active_uv_layer = mesh.attributes.get('UVMap')
 
         for tri_idx in mesh.loop_triangles:
 
@@ -377,7 +414,6 @@ def save(
             p2 = [rawp2[i] + offset[i] for i in range(0, 3)]
             p3 = [rawp3[i] + offset[i] for i in range(0, 3)]
 
-            tri.loops[0]
             # uv = [
             #     active_uv_layer[l].uv[:]
             #     for l in range(poly.loop_start, poly.loop_start + poly.loop_total)
@@ -387,10 +423,10 @@ def save(
             uv2 = active_uv_layer[tri.loops[1]].uv[:]
             uv3 = active_uv_layer[tri.loops[2]].uv[:]
 
-            n = mesh.loops[tri.loops[0]].normal
+            n = tri.normal
 
             material = (
-                mesh.materials[tri.material_index].name if usematnames else resolve_texture(mesh.materials[tri.material_index])
+                resolve_texture(mesh.materials[tri.material_index], usematnames)
                 if tri.material_index != None
                 else "NULL"
             )
@@ -507,7 +543,15 @@ def save(
     mp_difs = []
 
     for (mp, curve) in mp_list:
-        mp_difs.append(build_pathed_interior(mp, curve, off, flip, double))
+        mp_difs.append(build_pathed_interior(mp, curve, off, flip, double, usematnames, mbonly, bspmode, pointepsilon, planeepsilon, splitepsilon))
+
+    bspvalue = None
+    if bspmode == "Fast":
+        bspvalue = 0
+    elif bspmode == "Exhaustive":
+        bspvalue = 1
+    else:
+        bspvalue = 2
 
     if tris != 0:
         for i in range(0, len(builders)):
@@ -515,7 +559,7 @@ def save(
                 for (mpdif, markerlist) in mp_difs:
                     builders[i].add_pathed_interior(mpdif, markerlist)
 
-            dif = builders[i].build()
+            dif = builders[i].build(mbonly, bspvalue, pointepsilon, planeepsilon, splitepsilon)
 
             if i == 0:
                 for ge in game_entities:

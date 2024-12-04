@@ -1,0 +1,19 @@
+[package]
+name = "libdif"
+version = "0.1.0"
+authors = ["HiGuy Smith <higuymb@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "dif"
+path = "src/lib.rs"
+
+[dependencies]
+bitflags = "1.2.1"
+bytes = "0.4.12"
+cgmath = "0.17.0"
+dif-derive = { path = "src/dif-derive" }
+typenum = "1.11.2"
+typed_ints = { path = "../typed_ints" }

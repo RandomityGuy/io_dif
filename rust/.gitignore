@@ -1,0 +1,5 @@
+.idea
+.vscode
+target
+libdifbuilder/src/bsp_alt.rs
+libdifbuilder/src/csx_ref.rs

@@ -25,6 +25,7 @@ if "bpy" in locals():
 import os
 import platform
 import bpy
+import threading
 from bpy.props import (
     BoolProperty,
     CollectionProperty,
@@ -44,7 +45,7 @@ bl_info = {
     "author": "RandomityGuy",
     "description": "Dif import and export plugin for blender",
     "blender": (2, 80, 0),
-    "version": (1, 2, 10),
+    "version": (1, 3, 0),
     "location": "File > Import-Export",
     "warning": "",
     "category": "Import-Export",
@@ -269,14 +270,71 @@ class ExportDIF(bpy.types.Operator, ExportHelper):
     usematnames: BoolProperty(
         name="Use Material Names",
         description="Use material names instead of material texture file names",
-        default=False,
+        default=True,
+    )
+
+    mbonly: BoolProperty(
+        name="Optimize for Marble Blast",
+        description="Make the resultant DIF optimized for Marble Blast. Uncheck this if you want to use this for other Torque games.",
+        default=True
+    )
+
+    bspmode: EnumProperty(
+        items=[
+            ("Fast", "Fast", "Use a sampling algorithm to determine the best splitter."),
+            ("Exhaustive", "Exhaustive", "Use an exhaustive search algorithm to determine the best splitter. May take longer but builds more balanced trees."),
+            ("None", "None", "Do not build a BSP Tree, utilize this for fast conversion times or if building the BSP Tree fails.")
+        ],
+        name="BSP Algorithm",
+        description="The algorithm used for building the BSP Tree of the DIF.",
+        default="Fast"
+    )
+
+    pointepsilon: FloatProperty(
+        name="Point Epsilon",
+        description="Minimum distance between two points to be considered equal.",
+        default=1e-6
+    )
+
+    planeepsilon: FloatProperty(
+        name="Plane Epsilon",
+        description="Minimum difference between values of two plane to be considered equal.",
+        default=1e-5
+    )
+
+    splitepsilon: FloatProperty(
+        name="Split Epsilon",
+        description="Minimum difference between values of two splitting planes to be considered equal.",
+        default=1e-4
     )
 
     check_extension = True
 
+    # def draw(self, context):
+    #     layout = self.layout
+    #     layout.prop(self, "flip")
+    #     layout.prop(self, "double")
+    #     layout.prop(self, "maxpolys")
+    #     layout.prop(self, "applymodifiers")
+    #     layout.prop(self, "exportvisible")
+    #     layout.prop(self, "exportselected")
+    #     layout.prop(self, "usematnames")
+    #     layout.prop(self, "mbonly")
+    #     layout.prop(self, "bspmode")
+    #     layout.prop(self, "pointepsilon")
+    #     layout.prop(self, "planeepsilon")
+    #     layout.prop(self, "splitepsilon")
+    #     layout.label(text="BSP Algorithms:")
+    #     layout.label(text="Fast: Default mode, uses a sampling algorithm to determine the best splitter.")
+    #     layout.label(text="Exhaustive: Tries to find the most optimal splits for BSP Tree. May take longer but it is deterministic.")
+    #     layout.label(text="None: Do not generate BSP Tree")
+    #     layout.label(text="If your geometry is too complex, consider using None mode as there is no guarantee that a BSP Tree can be optimally built within set constraints.")
+    #     layout.label(text="BSP Trees are only used for Raycasts and Drop To Ground feature in Marble Blast. If you are not using these features, you can safely disable the BSP Tree.")
+
     def execute(self, context):
         from . import export_dif
-
+        if bpy.app.version >= (4, 0, 0):
+            bpy.types.VIEW3D_HT_header.append(progress_bar)
         keywords = self.as_keywords(ignore=("check_existing", "filter_glob"))
         export_dif.save(
             context,
@@ -288,9 +346,15 @@ class ExportDIF(bpy.types.Operator, ExportHelper):
             keywords.get("exportvisible", True),
             keywords.get("exportselected", False),
             keywords.get("usematnames", False),
+            keywords.get("mbonly", True),
+            keywords.get("bspmode", "Fast"),
+            keywords.get("pointepsilon", 1e-6),
+            keywords.get("planeepsilon", 1e-5),
+            keywords.get("splitepsilon", 1e-4),
         )
-        return {"FINISHED"}
+        stop_progress()
 
+        return {"FINISHED"}
 
 classes = (ExportDIF, ImportDIF, ImportCSX)
 
@@ -307,12 +371,37 @@ def menu_func_import_csx(self, context):
     self.layout.operator(ImportCSX.bl_idname, text="Torque Constructor (.csx)")
 
 
+def progress_bar(self, context):
+    row = self.layout.row()
+    if bpy.app.version >= (4, 0, 0):
+        row.progress(
+            factor=progress_bar.progress,
+            type="BAR",
+            text=progress_bar.progress_text
+        )
+    row.scale_x = 2
+
+def set_progress(progress, progress_text):
+    delta = progress - progress_bar.progress
+    if abs(delta) >= 0.1:
+        progress_bar.progress = progress
+        progress_bar.progress_text = progress_text
+        bpy.ops.wm.redraw_timer(type='DRAW_WIN_SWAP', iterations=1)
+
+def stop_progress():
+    if bpy.app.version >= (4, 0, 0):
+        bpy.types.VIEW3D_HT_header.remove(progress_bar)
+
+progress_bar.progress = 0
+progress_bar.progress_text = ""
+
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
     bpy.types.TOPBAR_MT_file_export.append(menu_func_export_dif)
     bpy.types.TOPBAR_MT_file_import.append(menu_func_import_dif)
     bpy.types.TOPBAR_MT_file_import.append(menu_func_import_csx)
+    # bpy.types.STATUSBAR_HT_header.append(progress_bar)
     bpy.utils.register_class(InteriorPanel)
     bpy.utils.register_class(AddCustomProperty)
     bpy.utils.register_class(DeleteCustomProperty)

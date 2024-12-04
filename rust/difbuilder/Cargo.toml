@@ -1,0 +1,14 @@
+[package]
+name = "difbuilder"
+version = "0.1.0"
+edition = "2021"
+authors = ["RandomityGuy"]
+
+[dependencies]
+libdifbuilder = { path = "../libdifbuilder" }
+libdif = { path = "../libdif" }
+cgmath = "0.17.0"
+indicatif = "0.17.6"
+
+[lib]
+crate-type = ["cdylib"]

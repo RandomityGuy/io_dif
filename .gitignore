@@ -3,4 +3,6 @@ out
 release
 .vs
 .vscode
+.idea
+trash
 CMakeSettings.json
