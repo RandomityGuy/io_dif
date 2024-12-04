@@ -11,8 +11,9 @@ env:
 
 jobs:
   build:
-
-    runs-on: macos-latest
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
 
     steps:
     - uses: actions/checkout@v3
@@ -21,7 +22,24 @@ jobs:
 
     - name: Upload Artifact
       uses: actions/upload-artifact@v3
+      if: matrix.os == 'macos-latest'
       with:
         name: DifBuilderLib
         path: |
           ${{github.workspace}}/rust/difbuilder/target/release/difbuilder.dylib
+          
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v3
+      if: matrix.os == 'ubuntu-latest'
+      with:
+        name: DifBuilderLib
+        path: |
+          ${{github.workspace}}/rust/difbuilder/target/release/libdifbuilder.so
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v3
+      if: matrix.os == 'windows-latest'
+      with:
+        name: DifBuilderLib
+        path: |
+          ${{github.workspace}}/rust/difbuilder/target/release/difbuilder.dll
