@@ -26,7 +26,7 @@ jobs:
       with:
         name: DifBuilderLib
         path: |
-          ${{github.workspace}}/rust/difbuilder/target/release/difbuilder.dylib
+          ${{github.workspace}}/rust/difbuilder/target/release/libdifbuilder.dylib
           
     - name: Upload Artifact
       uses: actions/upload-artifact@v3
