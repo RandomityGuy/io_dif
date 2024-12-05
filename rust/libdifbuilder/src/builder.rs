@@ -209,6 +209,8 @@ impl DIFBuilder {
         progress_report_callback: &mut dyn ProgressEventListener,
     ) -> (Interior, BSPReport) {
         self.interior.bounding_box = get_bounding_box(&self.brushes);
+        self.interior.bounding_box.min -= Point3F::new(3.0, 3.0, 3.0);
+        self.interior.bounding_box.max += Point3F::new(3.0, 3.0, 3.0);
         self.interior.bounding_sphere = get_bounding_sphere(&self.brushes);
         self.export_brushes(progress_report_callback);
         self.interior.zones.push(Zone {
@@ -254,6 +256,12 @@ impl DIFBuilder {
                 "Exported \"convex\" hulls".to_string(),
             );
             self.export_convex_hull(&grouped[i]);
+        }
+        // Ensure that ALL the polys are exported to a surface
+        for poly in self.brushes.iter() {
+            if !self.face_to_surface.contains_key(&poly.id) {
+                println!("Face not exported???: {}", poly.id);
+            }
         }
         let (bsp_root, plane_remap) = build_bsp(&self.brushes, progress_report_callback);
         self.bsp_report.balance_factor = bsp_root.balance_factor();
@@ -1298,7 +1306,10 @@ impl DIFBuilder {
     }
 
     fn group_polys(&self) -> Vec<Vec<usize>> {
-        let bounding_box = get_bounding_box(&self.brushes);
+        let mut bounding_box = get_bounding_box(&self.brushes);
+        bounding_box.min -= Point3F::new(3.0, 3.0, 3.0);
+        bounding_box.max += Point3F::new(3.0, 3.0, 3.0);
+
         let mut poly_bins: [Vec<usize>; 256] = std::array::from_fn(|_| Vec::new());
 
         for i in 0..16 {
@@ -1332,6 +1343,43 @@ impl DIFBuilder {
                 }
             }
         }
+
+        // let mut contain_set = HashSet::new();
+        // // Ensure ALL polys are present in the bins
+        // for i in 0..256 {
+        //     for poly in poly_bins[i].iter() {
+        //         contain_set.insert(self.brushes[*poly].id);
+        //     }
+        // }
+        // // Check
+        // for poly in self.brushes.iter() {
+        //     if !contain_set.contains(&poly.id) {
+        //         println!("Poly {} not in any bin!", poly.id);
+
+        //         let poly_min = Point3F::new(
+        //             poly.verts[0].x.min(poly.verts[1].x).min(poly.verts[2].x),
+        //             poly.verts[0].y.min(poly.verts[1].y).min(poly.verts[2].y),
+        //             poly.verts[0].z.min(poly.verts[1].z).min(poly.verts[2].z),
+        //         );
+        //         let poly_max = Point3F::new(
+        //             poly.verts[0].x.max(poly.verts[1].x).max(poly.verts[2].x),
+        //             poly.verts[0].y.max(poly.verts[1].y).max(poly.verts[2].y),
+        //             poly.verts[0].z.max(poly.verts[1].z).max(poly.verts[2].z),
+        //         );
+
+        //         println!("Min: {} {} {}", poly_min.x, poly_min.y, poly_min.z);
+        //         println!("Max: {} {} {}", poly_max.x, poly_max.y, poly_max.z);
+        //         println!("Container");
+        //         println!(
+        //             "Min: {} {} {}",
+        //             bounding_box.min.x, bounding_box.min.y, bounding_box.min.z
+        //         );
+        //         println!(
+        //             "Max: {} {} {}",
+        //             bounding_box.max.x, bounding_box.max.y, bounding_box.max.z
+        //         );
+        //     }
+        // }
 
         let mut ret: Vec<Vec<usize>> = vec![];
         for i in 0..256 {

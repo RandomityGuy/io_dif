@@ -310,14 +310,14 @@ impl DIFBSPNode {
                 self.split_brush_list(split_plane, plane_list);
                 self.plane_index = Some(split_plane);
 
-                if depth > 200 {
-                    println!(
-                        "Warning: depth over 200 {}, id {}, len {}",
-                        depth,
-                        self.plane_index.unwrap(),
-                        self.brush_list.len()
-                    );
-                }
+                // if depth > 200 {
+                //     println!(
+                //         "Warning: depth over 200 {}, id {}, len {}",
+                //         depth,
+                //         self.plane_index.unwrap(),
+                //         self.brush_list.len()
+                //     );
+                // }
 
                 if !used_planes.contains(&split_plane) {
                     used_planes.insert(split_plane);
