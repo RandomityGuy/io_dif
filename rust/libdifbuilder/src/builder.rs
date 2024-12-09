@@ -2000,6 +2000,7 @@ fn solve_matrix(
     use nalgebra::base::{Matrix1x3, Matrix3, Matrix3x1};
     use nalgebra::dimension::{U1, U3};
 
+    let zero3 = Vector3::new(0f32, 0f32, 0f32);
     let one3 = Vector3::new(1f32, 1f32, 1f32);
 
     // This system has 3 unknowns and 3 vars so it can't be over constrained
@@ -2014,16 +2015,19 @@ fn solve_matrix(
     // Throw this into a lazily parsed iter map so we only try the other options if
     // the first ones fail
     let choices = [
-        (point0, point1, point2, uv0, uv1, uv2),
-        (point0 + one3, point1 + one3, point2 + one3, uv0, uv1, uv2),
-        (point0 - one3, point1 - one3, point2 - one3, uv0, uv1, uv2),
+        (point0, point1, point2, uv0, uv1, uv2, zero3),
+        (point0, point1, point2, uv0, uv1, uv2, one3),
+        (point0, point1, point2, uv0, uv1, uv2, -one3),
     ];
     let results = choices
         .iter()
-        .map(|(point0, point1, point2, uv0, uv1, uv2)| {
-            let v0: &[f32; 3] = point0.as_ref();
-            let v1: &[f32; 3] = point1.as_ref();
-            let v2: &[f32; 3] = point2.as_ref();
+        .map(|(point0, point1, point2, uv0, uv1, uv2, offset)| {
+            let p0 = point0 + offset;
+            let p1 = point1 + offset;
+            let p2 = point2 + offset;
+            let v0: &[f32; 3] = p0.as_ref();
+            let v1: &[f32; 3] = p1.as_ref();
+            let v2: &[f32; 3] = p2.as_ref();
 
             let m = Matrix3::from_rows(&[
                 Matrix1x3::from_row_slice_generic(U1, U3, v0),
@@ -2032,13 +2036,15 @@ fn solve_matrix(
             ]);
             let v = Matrix3x1::from_row_slice_generic(U3, U1, &[*uv0, *uv1, *uv2]);
             let lu = FullPivLU::new(m);
-            lu.solve(&v)
+            (lu.solve(&v), offset)
         });
 
     let mut ans = None;
+    let mut dist_dot = 0.0;
     for result in results {
-        if let Some(res) = result {
+        if let (Some(res), offset) = result {
             ans = Some(res);
+            dist_dot = offset.x * res.x + offset.y * res.y + offset.z * res.z;
             break;
         }
     }
@@ -2065,7 +2071,7 @@ fn solve_matrix(
                 y: ans[1],
                 z: ans[2],
             },
-            distance: 0.0,
+            distance: dist_dot,
         }
     }
 }
