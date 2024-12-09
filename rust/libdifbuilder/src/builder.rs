@@ -2002,6 +2002,9 @@ fn solve_matrix(
 
     let zero3 = Vector3::new(0f32, 0f32, 0f32);
     let one3 = Vector3::new(1f32, 1f32, 1f32);
+    let u1 = Vector3::new(1f32, 0f32, 0f32);
+    let u2 = Vector3::new(0f32, 1f32, 0f32);
+    let u3 = Vector3::new(0f32, 0f32, 1f32);
 
     // This system has 3 unknowns and 3 vars so it can't be over constrained
     // But it can still be underconstrained:
@@ -2016,6 +2019,9 @@ fn solve_matrix(
     // the first ones fail
     let choices = [
         (point0, point1, point2, uv0, uv1, uv2, zero3),
+        (point0, point1, point2, uv0, uv1, uv2, u1),
+        (point0, point1, point2, uv0, uv1, uv2, u2),
+        (point0, point1, point2, uv0, uv1, uv2, u3),
         (point0, point1, point2, uv0, uv1, uv2, one3),
         (point0, point1, point2, uv0, uv1, uv2, -one3),
     ];
