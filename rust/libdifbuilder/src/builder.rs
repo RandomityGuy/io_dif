@@ -17,7 +17,6 @@ use image::ImageBuffer;
 use image::ImageEncoder;
 use image::Rgb;
 use itertools::Itertools;
-use nalgebra::FullPivLU;
 use rectangle_pack::contains_smallest_box;
 use rectangle_pack::pack_rects;
 use rectangle_pack::volume_heuristic;
@@ -1997,87 +1996,46 @@ fn solve_matrix(
     uv1: f32,
     uv2: f32,
 ) -> PlaneF {
-    use nalgebra::base::{Matrix1x3, Matrix3, Matrix3x1};
-    use nalgebra::dimension::{U1, U3};
+    use nalgebra::base::DMatrix;
+    use nalgebra::SVD;
 
-    let zero3 = Vector3::new(0f32, 0f32, 0f32);
-    let one3 = Vector3::new(1f32, 1f32, 1f32);
-    let u1 = Vector3::new(1f32, 0f32, 0f32);
-    let u2 = Vector3::new(0f32, 1f32, 0f32);
-    let u3 = Vector3::new(0f32, 0f32, 1f32);
+    // Define the matrix A (3x4) with 3 vertices and the extra 1s column
+    let a = DMatrix::from_row_slice(
+        3,
+        4,
+        &[
+            point0.x, point0.y, point0.z, 1.0, // Vertex 1: (1, 2, 3, 1)
+            point1.x, point1.y, point1.z, 1.0, // Vertex 2: (4, 5, 6, 1)
+            point2.x, point2.y, point2.z, 1.0, // Vertex 3: (7, 8, 9, 1)
+        ],
+    );
 
-    // This system has 3 unknowns and 3 vars so it can't be over constrained
-    // But it can still be underconstrained:
-    //  10x + 0y +  10x = 0
-    // -10x + 0y + -10x = 10
-    //  10x + 0y + -10x = 0
-    // Nalgebra stops working in these cases because it cannot find a single solution
-    // Solution? Just use two of the equations and sub in a nonsense equation for the
-    // third so the system has enough equations to be satisfied.
+    // Define the u-coordinates vector y (3x1)
+    let u = DMatrix::from_column_slice(
+        3,
+        1,
+        &[
+            uv0, // u1
+            uv1, // u2
+            uv2, // u3
+        ],
+    );
 
-    // Throw this into a lazily parsed iter map so we only try the other options if
-    // the first ones fail
-    let choices = [
-        (point0, point1, point2, uv0, uv1, uv2, zero3),
-        (point0, point1, point2, uv0, uv1, uv2, u1),
-        (point0, point1, point2, uv0, uv1, uv2, u2),
-        (point0, point1, point2, uv0, uv1, uv2, u3),
-        (point0, point1, point2, uv0, uv1, uv2, one3),
-        (point0, point1, point2, uv0, uv1, uv2, -one3),
-    ];
-    let results = choices
-        .iter()
-        .map(|(point0, point1, point2, uv0, uv1, uv2, offset)| {
-            let p0 = point0 + offset;
-            let p1 = point1 + offset;
-            let p2 = point2 + offset;
-            let v0: &[f32; 3] = p0.as_ref();
-            let v1: &[f32; 3] = p1.as_ref();
-            let v2: &[f32; 3] = p2.as_ref();
+    // Compute the SVD of A
+    let svd = SVD::new(a.clone(), true, true);
 
-            let m = Matrix3::from_rows(&[
-                Matrix1x3::from_row_slice_generic(U1, U3, v0),
-                Matrix1x3::from_row_slice_generic(U1, U3, v1),
-                Matrix1x3::from_row_slice_generic(U1, U3, v2),
-            ]);
-            let v = Matrix3x1::from_row_slice_generic(U3, U1, &[*uv0, *uv1, *uv2]);
-            let lu = FullPivLU::new(m);
-            (lu.solve(&v), offset)
-        });
+    // Compute the pseudoinverse of A
+    let a_pseudo = svd.pseudo_inverse(1e-6).expect("Pseudoinverse failed");
 
-    let mut ans = None;
-    let mut dist_dot = 0.0;
-    for result in results {
-        if let (Some(res), offset) = result {
-            ans = Some(res);
-            dist_dot = offset.x * res.x + offset.y * res.y + offset.z * res.z;
-            break;
-        }
-    }
+    // Solve for x using the pseudoinverse: x = A+ * y
+    let x = &a_pseudo * u;
 
-    if let None = ans {
-        println!("Failed to find solution for:");
-        println!("{}x + {}y + {}z = {}", point0.x, point1.x, point2.x, uv0);
-        println!("{}x + {}y + {}z = {}", point0.y, point1.y, point2.y, uv1);
-        println!("{}x + {}y + {}z = {}", point0.z, point1.z, point2.z, uv2);
-        PlaneF {
-            normal: Vector3 {
-                x: 1.0,
-                y: 0.0,
-                z: 0.0,
-            },
-            distance: 0.0,
-        }
-    } else {
-        let ans = ans.unwrap();
-
-        PlaneF {
-            normal: Vector3 {
-                x: ans[0],
-                y: ans[1],
-                z: ans[2],
-            },
-            distance: dist_dot,
-        }
-    }
+    return PlaneF {
+        normal: Vector3 {
+            x: x[0],
+            y: x[1],
+            z: x[2],
+        },
+        distance: x[3],
+    };
 }
