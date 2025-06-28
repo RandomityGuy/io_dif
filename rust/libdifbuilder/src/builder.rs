@@ -143,7 +143,7 @@ impl PolyGroup {
 pub struct DIFBuilder {
     brushes: Vec<Triangle>,
     interior: Interior,
-    face_to_surface: HashMap<i32, SurfaceIndex>,
+    face_to_surface: HashMap<i32, PossiblyNullSurfaceIndex>,
     face_to_plane: HashMap<i32, PlaneIndex>,
     plane_map: HashMap<OrdPlaneF, PlaneIndex>,
     point_map: HashMap<OrdPoint, PointIndex>,
@@ -276,12 +276,16 @@ impl DIFBuilder {
                 let mut exported = HashSet::new();
                 node.brush_list.iter().for_each(|f| {
                     let surf_index = self.face_to_surface.get(&(f.id as i32)).unwrap();
-                    if !exported.contains(surf_index.inner()) {
+
+                    let surf_index_num = match surf_index {
+                        PossiblyNullSurfaceIndex::NonNull(idx) => *idx.inner() as u32,
+                        PossiblyNullSurfaceIndex::Null(idx) => *idx.inner() as u32 | 0x80000000,
+                    };
+
+                    if !exported.contains(&surf_index_num) {
                         surface_count += 1;
-                        exported.insert(surf_index.inner());
-                        self.interior
-                            .solid_leaf_surfaces
-                            .push(PossiblyNullSurfaceIndex::NonNull(*surf_index));
+                        exported.insert(surf_index_num);
+                        self.interior.solid_leaf_surfaces.push(surf_index.clone());
                     }
                 });
                 if surface_count == 0 {
@@ -507,13 +511,14 @@ impl DIFBuilder {
         index
     }
 
-    fn export_surface(&mut self, triangle: &Triangle) -> SurfaceIndex {
+    fn export_surface(&mut self, triangle: &Triangle) -> PossiblyNullSurfaceIndex {
         if self.face_to_surface.contains_key(&triangle.id) {
-            return self.face_to_surface[&triangle.id];
+            return self.face_to_surface[&triangle.id].clone();
         }
         let index = SurfaceIndex::new(self.interior.surfaces.len() as _);
 
-        self.face_to_surface.insert(triangle.id, index);
+        self.face_to_surface
+            .insert(triangle.id, PossiblyNullSurfaceIndex::NonNull(index));
 
         let plane_index = self.export_plane(&triangle.plane);
         let pflipped = plane_index.inner() & 0x8000 > 0;
@@ -568,7 +573,38 @@ impl DIFBuilder {
             .push(LMapIndex::new(0xffffffffu32));
         self.interior.surfaces.push(surface);
 
-        index
+        PossiblyNullSurfaceIndex::NonNull(index)
+    }
+
+    fn export_null_surface(&mut self, triangle: &Triangle) -> PossiblyNullSurfaceIndex {
+        if self.face_to_surface.contains_key(&triangle.id) {
+            return self.face_to_surface[&triangle.id].clone();
+        }
+        let index = NullSurfaceIndex::new(self.interior.null_surfaces.len() as _);
+
+        self.face_to_surface
+            .insert(triangle.id, PossiblyNullSurfaceIndex::Null(index));
+
+        let plane_index = self.export_plane(&triangle.plane);
+        self.face_to_plane.insert(triangle.id, plane_index);
+
+        let winding_index = WindingIndexIndex::new(self.interior.indices.len() as _);
+        let winding_length = 3;
+        let p_idxs = triangle.verts.map(|p| self.export_point(&p));
+        self.interior.indices.push(p_idxs[0]);
+        self.interior.indices.push(p_idxs[1]);
+        self.interior.indices.push(p_idxs[2]);
+
+        let null_surface = NullSurface {
+            plane_index: plane_index,
+            surface_flags: SurfaceFlags::OUTSIDE_VISIBLE,
+            winding_start: winding_index,
+            winding_count: winding_length as _,
+        };
+
+        self.interior.null_surfaces.push(null_surface);
+
+        PossiblyNullSurfaceIndex::Null(index)
     }
 
     fn export_convex_hull(&mut self, poly_group: &Vec<usize>) -> usize {
@@ -661,7 +697,13 @@ impl DIFBuilder {
         // Export hull surfaces
         let mut hull_surface_indices = b
             .iter()
-            .map(|f| PossiblyNullSurfaceIndex::NonNull(self.export_surface(f)))
+            .map(|f| {
+                if f.material == "NULL" {
+                    self.export_null_surface(f)
+                } else {
+                    self.export_surface(f)
+                }
+            })
             .collect::<Vec<_>>();
         self.interior
             .hull_surface_indices

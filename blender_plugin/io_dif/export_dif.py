@@ -261,37 +261,44 @@ def get_offset(depsgraph, applymodifiers=True):
 
 def build_pathed_interior(ob: Object, marker_ob: Curve, offset, flip, double, usematnames, mbonly=True, bspmode="Fast", pointepsilon=1e-6, planeepsilon=1e-5, splitepsilon=1e-4):
     difbuilder = DifBuilder()
+    
     mesh = ob.to_mesh()
-    mesh_triangulate(mesh)
+
+    mesh.calc_loop_triangles()
+    if bpy.app.version < (4, 0, 0):
+        mesh.calc_normals_split()
+
+    mesh_verts = mesh.vertices
+
+    if mesh.uv_layers != None and mesh.uv_layers.active != None:
+        active_uv_layer = mesh.uv_layers.active.data
+    else:
+        active_uv_layer = mesh.attributes.get('UVMap')
 
     mesh_verts = mesh.vertices
 
     active_uv_layer = mesh.uv_layers.active.data
 
-    for poly in mesh.polygons:
+    for tri_idx in mesh.loop_triangles:
+        tri: bpy.types.MeshLoopTriangle = tri_idx
 
-        rawp1 = mesh_verts[poly.vertices[0]].co
-        rawp2 = mesh_verts[poly.vertices[1]].co
-        rawp3 = mesh_verts[poly.vertices[2]].co
+        rawp1 = mesh_verts[tri.vertices[0]].co
+        rawp2 = mesh_verts[tri.vertices[1]].co
+        rawp3 = mesh_verts[tri.vertices[2]].co
 
         p1 = [rawp1[i] + offset[i] for i in range(0, 3)]
         p2 = [rawp2[i] + offset[i] for i in range(0, 3)]
         p3 = [rawp3[i] + offset[i] for i in range(0, 3)]
 
-        uv = [
-            active_uv_layer[l].uv[:]
-            for l in range(poly.loop_start, poly.loop_start + poly.loop_total)
-        ]
+        uv1 = active_uv_layer[tri.loops[0]].uv[:]
+        uv2 = active_uv_layer[tri.loops[1]].uv[:]
+        uv3 = active_uv_layer[tri.loops[2]].uv[:]
 
-        uv1 = uv[0]
-        uv2 = uv[1]
-        uv3 = uv[2]
-
-        n = mesh_verts[poly.vertices[0]].normal
+        n = tri.normal
 
         material = (
-            resolve_texture(mesh.materials[poly.material_index], usematnames)
-            if poly.material_index != None
+            resolve_texture(mesh.materials[tri.material_index], usematnames)
+            if tri.material_index != None
             else "NULL"
         )
 
