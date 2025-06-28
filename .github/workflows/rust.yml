@@ -22,25 +22,25 @@ jobs:
       run: cd rust/difbuilder && cargo build --release
 
     - name: Upload Artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: matrix.os == 'macos-latest'
       with:
-        name: DifBuilderLib
+        name: DifBuilderLib-${{ matrix.runs-on }}
         path: |
           ${{github.workspace}}/rust/difbuilder/target/release/libdifbuilder.dylib
           
     - name: Upload Artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: matrix.os == 'ubuntu-latest'
       with:
-        name: DifBuilderLib
+        name: DifBuilderLib-${{ matrix.runs-on }}
         path: |
           ${{github.workspace}}/rust/difbuilder/target/release/libdifbuilder.so
 
     - name: Upload Artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: matrix.os == 'windows-latest'
       with:
-        name: DifBuilderLib
+        name: DifBuilderLib-${{ matrix.runs-on }}
         path: |
           ${{github.workspace}}/rust/difbuilder/target/release/difbuilder.dll
