@@ -1687,7 +1687,9 @@ impl OrdPlaneF {
 
 impl PartialEq for OrdPlaneF {
     fn eq(&self, other: &Self) -> bool {
-        self.x * other.x + self.y * other.y + self.z * other.z > 0.999
+        self.x.abs_diff_eq(&other.x, unsafe { PLANE_EPSILON })
+            && self.y.abs_diff_eq(&other.y, unsafe { PLANE_EPSILON })
+            && self.z.abs_diff_eq(&other.z, unsafe { PLANE_EPSILON })
             && self.d.abs_diff_eq(&other.d, unsafe { PLANE_EPSILON })
     }
 }
@@ -1712,47 +1714,47 @@ impl PartialEq for OrdTexGen {
             .plane_x
             .normal
             .x
-            .abs_diff_eq(&other.0.plane_x.normal.x, 1e-5)
+            .abs_diff_eq(&other.0.plane_x.normal.x, unsafe { PLANE_EPSILON })
             && self
                 .0
                 .plane_x
                 .normal
                 .y
-                .abs_diff_eq(&other.0.plane_x.normal.y, 1e-5)
+                .abs_diff_eq(&other.0.plane_x.normal.y, unsafe { PLANE_EPSILON })
             && self
                 .0
                 .plane_x
                 .normal
                 .z
-                .abs_diff_eq(&other.0.plane_x.normal.z, 1e-5)
+                .abs_diff_eq(&other.0.plane_x.normal.z, unsafe { PLANE_EPSILON })
             && self
                 .0
                 .plane_x
                 .distance
-                .abs_diff_eq(&other.0.plane_x.distance, 1e-5)
+                .abs_diff_eq(&other.0.plane_x.distance, unsafe { PLANE_EPSILON })
             && self
                 .0
                 .plane_y
                 .normal
                 .x
-                .abs_diff_eq(&other.0.plane_y.normal.x, 1e-5)
+                .abs_diff_eq(&other.0.plane_y.normal.x, unsafe { PLANE_EPSILON })
             && self
                 .0
                 .plane_y
                 .normal
                 .y
-                .abs_diff_eq(&other.0.plane_y.normal.y, 1e-5)
+                .abs_diff_eq(&other.0.plane_y.normal.y, unsafe { PLANE_EPSILON })
             && self
                 .0
                 .plane_y
                 .normal
                 .z
-                .abs_diff_eq(&other.0.plane_y.normal.z, 1e-5)
+                .abs_diff_eq(&other.0.plane_y.normal.z, unsafe { PLANE_EPSILON })
             && self
                 .0
                 .plane_y
                 .distance
-                .abs_diff_eq(&other.0.plane_y.distance, 1e-5)
+                .abs_diff_eq(&other.0.plane_y.distance, unsafe { PLANE_EPSILON })
     }
 }
 
@@ -1989,8 +1991,22 @@ fn gen_tex_gen_from_points(
     uv2: Vector2<f32>,
 ) -> TexGenEq {
     let tg = TexGenEq {
-        plane_x: solve_matrix(point0, point1, point2, uv0.x, uv1.x, uv2.x),
-        plane_y: solve_matrix(point0, point1, point2, uv0.y, uv1.y, uv2.y),
+        plane_x: solve_matrix(
+            point0.cast().unwrap(),
+            point1.cast().unwrap(),
+            point2.cast().unwrap(),
+            uv0.x as f64,
+            uv1.x as f64,
+            uv2.x as f64,
+        ),
+        plane_y: solve_matrix(
+            point0.cast().unwrap(),
+            point1.cast().unwrap(),
+            point2.cast().unwrap(),
+            uv0.y as f64,
+            uv1.y as f64,
+            uv2.y as f64,
+        ),
     };
 
     fn eps_fract(a: f32, b: f32) -> bool {
@@ -2031,12 +2047,12 @@ fn gen_tex_gen_from_points(
 }
 
 fn solve_matrix(
-    point0: Vector3<f32>,
-    point1: Vector3<f32>,
-    point2: Vector3<f32>,
-    uv0: f32,
-    uv1: f32,
-    uv2: f32,
+    point0: Vector3<f64>,
+    point1: Vector3<f64>,
+    point2: Vector3<f64>,
+    uv0: f64,
+    uv1: f64,
+    uv2: f64,
 ) -> PlaneF {
     use nalgebra::base::DMatrix;
     use nalgebra::SVD;
@@ -2067,17 +2083,19 @@ fn solve_matrix(
     let svd = SVD::new(a.clone(), true, true);
 
     // Compute the pseudoinverse of A
-    let a_pseudo = svd.pseudo_inverse(1e-6).expect("Pseudoinverse failed");
+    let a_pseudo = svd
+        .pseudo_inverse(unsafe { PLANE_EPSILON as f64 })
+        .expect("Pseudoinverse failed");
 
     // Solve for x using the pseudoinverse: x = A+ * y
     let x = &a_pseudo * u;
 
     return PlaneF {
         normal: Vector3 {
-            x: x[0],
-            y: x[1],
-            z: x[2],
+            x: x[0] as f32,
+            y: x[1] as f32,
+            z: x[2] as f32,
         },
-        distance: x[3],
+        distance: x[3] as f32,
     };
 }
