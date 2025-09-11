@@ -51,6 +51,9 @@ difbuilderlib.add_pathed_interior.argtypes = [
     ctypes.c_void_p,
     ctypes.c_void_p,
     ctypes.c_void_p,
+    ctypes.c_void_p,
+    ctypes.c_void_p,
+    ctypes.POINTER(ctypes.c_float),
 ]
 
 difbuilderlib.new_marker_list.restype = ctypes.c_void_p
@@ -61,6 +64,13 @@ difbuilderlib.push_marker.argtypes = [
     ctypes.c_int,
     ctypes.c_int,
 ]
+difbuilderlib.new_trigger_id_list.restype = ctypes.c_void_p
+difbuilderlib.dispose_trigger_id_list.argtypes = [ctypes.c_void_p]
+difbuilderlib.push_trigger_id.argtypes = [
+    ctypes.c_void_p,
+    ctypes.c_int,
+]
+
 difbuilderlib.add_game_entity.argtypes = [
     ctypes.c_void_p,
     ctypes.c_char_p,
@@ -77,6 +87,7 @@ difbuilderlib.add_dict_kvp.argtypes = [
 ]
 difbuilderlib.add_trigger.argtypes = [
     ctypes.c_void_p,
+    ctypes.POINTER(ctypes.c_float),
     ctypes.POINTER(ctypes.c_float),
     ctypes.c_char_p,
     ctypes.c_char_p,
@@ -105,9 +116,20 @@ class MarkerList:
     def __del__(self):
         difbuilderlib.dispose_marker_list(self.__ptr__)
 
-    def push_marker(self, vec, msToNext, initialPathPosition):
+    def push_marker(self, vec, msToNext, smoothing_type):
         vecarr = (ctypes.c_float * len(vec))(*vec)
-        difbuilderlib.push_marker(self.__ptr__, vecarr, msToNext, initialPathPosition)
+        difbuilderlib.push_marker(self.__ptr__, vecarr, msToNext, smoothing_type)
+
+
+class TriggerIDList:
+    def __init__(self):
+        self.__ptr__ = difbuilderlib.new_trigger_id_list()
+
+    def __del__(self):
+        difbuilderlib.dispose_trigger_id_list(self.__ptr__)
+
+    def push_trigger_id(self, num):
+        difbuilderlib.push_trigger_id(self.__ptr__, num)
 
 
 class DIFDict:
@@ -137,20 +159,26 @@ class Dif:
             self.__ptr__, ctypes.create_string_buffer(path.encode("ascii"))
         )
 
-    def add_game_entity(self, gameClass, datablock, position, scale, properties: dict):
-        vecarr = (ctypes.c_float * len(position))(*position)
-        propertydict = DIFDict()
-        for key in properties:
-            propertydict.add_kvp(key, properties[key])
-        propertydict.add_kvp("scale", "%.5f %.5f %.5f" % (scale[0], scale[1], scale[2]))
-        if gameClass == "Trigger":
-            propertydict.add_kvp("polyhedron", "0 0 0 1 0 0 0 -1 0 0 0 1")
+    def add_game_entity(self, entity):
+        vecarr = (ctypes.c_float * len(entity.position))(*entity.position)
         difbuilderlib.add_game_entity(
             self.__ptr__,
-            ctypes.create_string_buffer(gameClass.encode("ascii")),
-            ctypes.create_string_buffer(datablock.encode("ascii")),
+            ctypes.create_string_buffer(entity.gameclass.encode("ascii")),
+            ctypes.create_string_buffer(entity.datablock.encode("ascii")),
             vecarr,
-            propertydict.__ptr__,
+            entity.properties.__ptr__,
+        )
+
+    def add_trigger(self, trigger):
+        pos_vecarr = (ctypes.c_float * len(trigger.position))(*trigger.position)
+        size_vecarr = (ctypes.c_float * len(trigger.size))(*trigger.size)
+        difbuilderlib.add_trigger(
+            self.__ptr__,
+            pos_vecarr,
+            size_vecarr,
+            ctypes.create_string_buffer(trigger.name.encode("ascii")),
+            ctypes.create_string_buffer(trigger.datablock.encode("ascii")),
+            trigger.properties.__ptr__,
         )
 
 
@@ -182,20 +210,9 @@ class DifBuilder:
             self.__ptr__, p3arr, p2arr, p1arr, uv3arr, uv2arr, uv1arr, narr, mat
         )
 
-    def add_pathed_interior(self, dif: Dif, markerlist: MarkerList):
-        difbuilderlib.add_pathed_interior(self.__ptr__, dif.__ptr__, markerlist.__ptr__)
-
-    # NONFUNCTIONAL, TRIGGERS ARENT GETTING CREATED WHEN PRESSING CREATE SUBS
-    def add_trigger(self, datablock, name, position, scale, props: DIFDict):
-        posarr = (ctypes.c_float * len(position))(*position)
-        props.add_kvp("scale", f"{scale[0]} {scale[1]} {scale[2]}")
-        difbuilderlib.add_trigger(
-            self.__ptr__,
-            posarr,
-            ctypes.create_string_buffer(name.encode("ascii")),
-            ctypes.create_string_buffer(datablock.encode("ascii")),
-            props.__ptr__,
-        )
+    def add_pathed_interior(self, mp):
+        vecarr = (ctypes.c_float * len(mp.offset))(*mp.offset)
+        difbuilderlib.add_pathed_interior(self.__ptr__, mp.dif.__ptr__, mp.marker_list.__ptr__, mp.trigger_id_list.__ptr__, mp.properties.__ptr__, vecarr)
 
     def build(self, mbonly, bspmode, pointepsilon, planeepsilon, splitepsilon):
         return Dif(difbuilderlib.build(self.__ptr__, mbonly, bspmode, pointepsilon, planeepsilon, splitepsilon, update_status_c))
@@ -258,107 +275,179 @@ def get_offset(depsgraph, applymodifiers=True):
     off = [((maxv[i] - minv[i]) / 2) + 50 for i in range(0, 3)]
     return off
 
+ 
+class GamePathedInterior:
+    def __init__(self, ob: Object, triggers: list[Object], offset, flip, double, usematnames, mbonly=True, bspmode="Fast", pointepsilon=1e-6, planeepsilon=1e-5, splitepsilon=1e-4):
+        difbuilder = DifBuilder()
 
-def build_pathed_interior(ob: Object, marker_ob: Curve, offset, flip, double, usematnames, mbonly=True, bspmode="Fast", pointepsilon=1e-6, planeepsilon=1e-5, splitepsilon=1e-4):
-    difbuilder = DifBuilder()
-    
-    mesh = ob.to_mesh()
+        mesh = ob.to_mesh()
 
-    mesh.calc_loop_triangles()
-    if bpy.app.version < (4, 0, 0):
-        mesh.calc_normals_split()
+        mesh.calc_loop_triangles()
+        if bpy.app.version < (4, 0, 0):
+            mesh.calc_normals_split()
 
-    mesh_verts = mesh.vertices
+        mesh_verts = mesh.vertices
 
-    if mesh.uv_layers != None and mesh.uv_layers.active != None:
-        active_uv_layer = mesh.uv_layers.active.data
-    else:
-        active_uv_layer = mesh.attributes.get('UVMap')
+        if mesh.uv_layers != None and mesh.uv_layers.active != None:
+            active_uv_layer = mesh.uv_layers.active.data
+        else:
+            active_uv_layer = mesh.attributes.get('UVMap')
 
-    mesh_verts = mesh.vertices
+        for tri_idx in mesh.loop_triangles:
+            tri: bpy.types.MeshLoopTriangle = tri_idx
 
-    active_uv_layer = mesh.uv_layers.active.data
+            rawp1 = mesh_verts[tri.vertices[0]].co
+            rawp2 = mesh_verts[tri.vertices[1]].co
+            rawp3 = mesh_verts[tri.vertices[2]].co
 
-    for tri_idx in mesh.loop_triangles:
-        tri: bpy.types.MeshLoopTriangle = tri_idx
+            p1 = [rawp1[i] + offset[i] for i in range(0, 3)]
+            p2 = [rawp2[i] + offset[i] for i in range(0, 3)]
+            p3 = [rawp3[i] + offset[i] for i in range(0, 3)]
 
-        rawp1 = mesh_verts[tri.vertices[0]].co
-        rawp2 = mesh_verts[tri.vertices[1]].co
-        rawp3 = mesh_verts[tri.vertices[2]].co
+            uv1 = active_uv_layer[tri.loops[0]].uv[:]
+            uv2 = active_uv_layer[tri.loops[1]].uv[:]
+            uv3 = active_uv_layer[tri.loops[2]].uv[:]
 
-        p1 = [rawp1[i] + offset[i] for i in range(0, 3)]
-        p2 = [rawp2[i] + offset[i] for i in range(0, 3)]
-        p3 = [rawp3[i] + offset[i] for i in range(0, 3)]
+            n = tri.normal
 
-        uv1 = active_uv_layer[tri.loops[0]].uv[:]
-        uv2 = active_uv_layer[tri.loops[1]].uv[:]
-        uv3 = active_uv_layer[tri.loops[2]].uv[:]
+            material = (
+                resolve_texture(mesh.materials[tri.material_index], usematnames)
+                if tri.material_index != None
+                else "NULL"
+            )
 
-        n = tri.normal
+            if not flip:
+                difbuilder.add_triangle(p1, p2, p3, uv1, uv2, uv3, n, material)
+                if double:
+                    difbuilder.add_triangle(p3, p2, p1, uv3, uv2, uv1, n, material)
+            else:
+                difbuilder.add_triangle(p3, p2, p1, uv3, uv2, uv1, n, material)
+                if double:
+                    difbuilder.add_triangle(p1, p2, p3, uv1, uv2, uv3, n, material)
 
-        material = (
-            resolve_texture(mesh.materials[tri.material_index], usematnames)
-            if tri.material_index != None
-            else "NULL"
+        bspvalue = None
+        if bspmode == "Fast":
+            bspvalue = 0
+        elif bspmode == "Exhaustive":
+            bspvalue = 1
+        else:
+            bspvalue = 2
+
+        dif = difbuilder.build(mbonly, bspvalue, pointepsilon, planeepsilon, splitepsilon)
+
+        marker_ob = ob.dif_props.marker_path
+
+        marker_list = MarkerList()
+
+        if(marker_ob):
+            marker_pts = (
+                marker_ob.splines[0].bezier_points
+                if (len(marker_ob.splines[0].bezier_points) != 0)
+                else marker_ob.splines[0].points
+            )
+            msToNext = int(ob.dif_props.total_time / (len(marker_pts)-1))
+
+            path_type = ob.dif_props.marker_type
+            if path_type == "linear":
+                smoothing_type = 0
+            elif path_type == "spline":
+                smoothing_type = 1
+            elif path_type == "accelerate":
+                smoothing_type = 2
+
+            curve_transform = None
+            curve_obj = next((obj for obj in bpy.data.objects if obj.data == marker_ob.original), None)
+            if curve_obj:
+                curve_transform = curve_obj.matrix_world
+
+            for index, pt in enumerate(marker_pts):
+                co = pt.co
+                if len(co) == 4:
+                    co = Vector((co.x, co.y, co.z))
+
+                if(curve_transform):
+                    co = curve_transform @ co
+
+                if index == len(marker_pts)-1:
+                    marker_list.push_marker(co, 0, smoothing_type)
+                else:
+                    marker_list.push_marker(co, msToNext, smoothing_type)
+
+        else:
+            marker_list.push_marker(ob.location, ob.dif_props.total_time, 0)
+            marker_list.push_marker(ob.location, 0, 0)
+
+        trigger_id_list = TriggerIDList()
+
+        if(ob.dif_props.reverse):
+            initial_target_position = -2
+        else:
+            initial_target_position = -1
+
+        for index, trigger in enumerate(triggers):
+            if trigger.target_object is ob:
+                trigger_id_list.push_trigger_id(index)
+                initial_target_position = 0
+
+        ob.to_mesh_clear()
+
+        self.dif = dif
+        self.marker_list = marker_list
+        self.trigger_id_list = trigger_id_list
+
+        propertydict = DIFDict()
+        propertydict.add_kvp("initialTargetPosition", str(initial_target_position))
+        propertydict.add_kvp("initialPosition", str(ob.dif_props.start_time))
+
+        self.properties = propertydict
+        self.offset = [-(ob.location[i] + offset[i]) for i in range(0, 3)]
+
+
+class GameEntity:
+    def __init__(self, ob, offset):
+        props = ob.dif_props
+
+        propertydict = DIFDict()
+        for prop in props.game_entity_properties:
+            propertydict.add_kvp(prop.key, prop.value)
+
+        propertydict.add_kvp("scale", "%.5f %.5f %.5f" % (ob.scale[0], ob.scale[1], ob.scale[2]))
+
+        axis_ang_raw: Vector = ob.matrix_world.to_quaternion().to_axis_angle()
+
+        #TODO fix or remove
+        from math import degrees
+        propertydict.add_kvp("rotation", "%.5f %.5f %.5f %.5f" % (
+            axis_ang_raw[0][0], 
+            axis_ang_raw[0][1], 
+            axis_ang_raw[0][2],
+            degrees(axis_ang_raw[1]))
         )
 
-        if not flip:
-            difbuilder.add_triangle(p1, p2, p3, uv1, uv2, uv3, n, material)
-            if double:
-                difbuilder.add_triangle(p3, p2, p1, uv3, uv2, uv1, n, material)
-        else:
-            difbuilder.add_triangle(p3, p2, p1, uv3, uv2, uv1, n, material)
-            if double:
-                difbuilder.add_triangle(p1, p2, p3, uv1, uv2, uv3, n, material)
+        if props.game_entity_gameclass == "Trigger":
+            propertydict.add_kvp("polyhedron", "0 0 0 1 0 0 0 -1 0 0 0 1")
 
-    bspvalue = None
-    if bspmode == "Fast":
-        bspvalue = 0
-    elif bspmode == "Exhaustive":
-        bspvalue = 1
-    else:
-        bspvalue = 2
-
-    dif = difbuilder.build(mbonly, bspvalue, pointepsilon, planeepsilon, splitepsilon)
-
-    marker_pts = (
-        marker_ob.splines[0].bezier_points
-        if (len(marker_ob.splines[0].bezier_points) != 0)
-        else marker_ob.splines[0].points
-    )
-    msToNext = int((marker_ob.path_duration / len(marker_pts)))
-    initialPathPosition = int(marker_ob.eval_time)
-
-    marker_list = MarkerList()
-
-    for pt in marker_pts:
-        marker_list.push_marker(pt.co, msToNext, initialPathPosition)
-
-    ob.to_mesh_clear()
-
-    return (dif, marker_list)
+        self.position = [ob.location[i] + offset[i] for i in range(0, 3)]
+        self.datablock = props.game_entity_datablock
+        self.gameclass = props.game_entity_gameclass
+        self.properties = propertydict
 
 
-def build_game_entity(ob: Object):
-    props = ob.dif_props
-    propertydict = {}
-    for prop in props.game_entity_properties:
-        propertydict[prop.key] = prop.value
+class GameTrigger:
+    def __init__(self, ob, offset):
+        props = ob.dif_props
 
-    axis_ang_raw: Vector = ob.matrix_world.to_quaternion().to_axis_angle()
-    axis_ang = (
-        axis_ang_raw[1],
-        axis_ang_raw[0][0],
-        axis_ang_raw[0][1],
-        axis_ang_raw[0][2],
-    )
+        propertydict = DIFDict()
+        for prop in props.game_entity_properties:
+            propertydict.add_kvp(prop.key, prop.value)
 
-    return (
-        props.game_entity_datablock,
-        props.game_entity_gameclass,
-        propertydict,
-        ob.scale,
-    )
+        self.position = [ob.location[i] + offset[i] for i in range(0, 3)]
+        self.size = [ob.scale[0], -ob.scale[1], ob.scale[2]]
+        self.datablock = props.game_entity_datablock
+        self.properties = propertydict
+        self.name = "MustChange"
+
+        self.target_object = ob.dif_props.pathed_interior_target
 
 
 def save(
@@ -454,7 +543,8 @@ def save(
                     tris += 1
 
     mp_list = []
-    game_entities: list[Object] = []
+    game_entities: list[GameEntity] = []
+    triggers: list[GameTrigger] = []
 
     def is_object_instance_selected(object_instance):
         # For instanced objects we check selection of their instancer (more accurately: check
@@ -490,7 +580,10 @@ def save(
             dif_props = ob_eval.dif_props
 
             if dif_props.interior_type == "game_entity":
-                game_entities.append(ob_eval)
+                game_entities.append(GameEntity(ob_eval, off))
+                
+            if dif_props.interior_type == "path_trigger":
+                triggers.append(GameTrigger(ob_eval, off))
 
             try:
                 me = ob_eval.to_mesh()
@@ -507,7 +600,7 @@ def save(
             ob_eval.to_mesh_clear()
 
             if dif_props.interior_type == "pathed_interior":
-                mp_list.append((ob_eval, dif_props.marker_path))
+                mp_list.append(ob_eval)
 
     # handle object instances for these versions, ew code duplication
     if bpy.app.version >= (3, 1, 0) and applymodifiers:
@@ -529,7 +622,10 @@ def save(
             dif_props = ob_eval.dif_props
 
             if dif_props.interior_type == "game_entity":
-                game_entities.append(ob_eval)
+                game_entities.append(GameEntity(ob_eval, off))
+                
+            if dif_props.interior_type == "path_trigger":
+                triggers.append(GameTrigger(ob_eval, off))
 
             try:
                 me = ob_eval.to_mesh()
@@ -547,12 +643,12 @@ def save(
             ob_eval.to_mesh_clear()
 
             if dif_props.interior_type == "pathed_interior":
-                mp_list.append((ob_eval, dif_props.marker_path))
+                mp_list.append(ob_eval)
 
     mp_difs = []
 
-    for (mp, curve) in mp_list:
-        mp_difs.append(build_pathed_interior(mp, curve, off, flip, double, usematnames, mbonly, bspmode, pointepsilon, planeepsilon, splitepsilon))
+    for mp in mp_list:
+        mp_difs.append(GamePathedInterior(mp, triggers, off, flip, double, usematnames, mbonly, bspmode, pointepsilon, planeepsilon, splitepsilon))
 
     bspvalue = None
     if bspmode == "Fast":
@@ -565,20 +661,16 @@ def save(
     if tris != 0:
         for i in range(0, len(builders)):
             if i == 0:
-                for (mpdif, markerlist) in mp_difs:
-                    builders[i].add_pathed_interior(mpdif, markerlist)
+                for mp in mp_difs:
+                    builders[i].add_pathed_interior(mp)
 
             dif = builders[i].build(mbonly, bspvalue, pointepsilon, planeepsilon, splitepsilon)
 
             if i == 0:
                 for ge in game_entities:
-                    entity = build_game_entity(ge)
-                    dif.add_game_entity(
-                        entity[1],
-                        entity[0],
-                        [ge.location[i] + off[i] for i in range(0, 3)],
-                        entity[3],
-                        entity[2],
-                    )
+                    dif.add_game_entity(ge)
+
+                for trigger in triggers:
+                    dif.add_trigger(trigger)
 
             dif.write_dif(str(Path(filepath).with_suffix("")) + str(i) + ".dif")

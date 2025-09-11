@@ -208,8 +208,8 @@ impl DIFBuilder {
         progress_report_callback: &mut dyn ProgressEventListener,
     ) -> (Interior, BSPReport) {
         self.interior.bounding_box = get_bounding_box(&self.brushes);
-        self.interior.bounding_box.min -= Point3F::new(3.0, 3.0, 3.0);
-        self.interior.bounding_box.max += Point3F::new(3.0, 3.0, 3.0);
+        //self.interior.bounding_box.min -= Point3F::new(3.0, 3.0, 3.0);
+        //self.interior.bounding_box.max += Point3F::new(3.0, 3.0, 3.0);
         self.interior.bounding_sphere = get_bounding_sphere(&self.brushes);
         self.export_brushes(progress_report_callback);
         self.interior.zones.push(Zone {

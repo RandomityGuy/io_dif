@@ -79,26 +79,48 @@ class DeleteCustomProperty(bpy.types.Operator):
         dif_props: InteriorSettings = context.object.dif_props
         prop = dif_props.game_entity_properties.remove(self.delete_id)
         return {"FINISHED"}
-
+    
+    
+def set_marker_path(self, context):
+    curve = self.marker_path
+    if curve:
+        for spline in curve.splines:
+            spline.type = 'POLY'
 
 class InteriorSettings(bpy.types.PropertyGroup):
     interior_type: EnumProperty(
         name="Interior Entity Type",
         items=(
-            ("static_interior", "InteriorResource", "Normal static interior"),
-            ("pathed_interior", "PathedInterior", "Moving interior"),
-            ("game_entity", "Game Entity", "An entity in the game"),
+            ("static_interior", "Interior Resource", "Normal static interior"),
+            ("pathed_interior", "Pathed Interior", "Moving interior"),
+            ("game_entity", "Game Entity", "A game object"),
+            ("path_trigger", "Path Trigger", "A trigger for a pathed interior"),
         ),
         default="static_interior",
+        description="How this object should be interpreted for the exporter.",
     )
-
-    marker_path: PointerProperty(type=bpy.types.Curve, name="Marker Path")
+    
+    marker_path: PointerProperty(type=bpy.types.Curve, name="Marker Path", description="The path to create markers from.", update=set_marker_path)
+    pathed_interior_target: PointerProperty(type=bpy.types.Object, name="Pathed Interior Target", description="The platform to trigger.")
     game_entity_datablock: StringProperty(name="Datablock")
     game_entity_gameclass: StringProperty(name="Game Class")
     game_entity_properties: CollectionProperty(
         type=InteriorKVP, name="Custom Properties"
     )
+    
+    marker_type: EnumProperty(
+        name="Marker Type",
+        items=(
+            ("linear", "Linear", "Linear interpolation"),
+            ("spline", "Spline", "Centripetal Catmull–Rom path"),
+            ("accelerate", "Accelerate", "Sinusoidal easing"),
+        ),
+        description="The type of smoothing that should be applied to all markers exported from the path.",
+    )
 
+    total_time: IntProperty(name="Total Time", description="The total time (in ms) from path start to end. Equally divided across each marker on export.", default=3000)
+    start_time: IntProperty(name="Starting Time", description="The time in the path (in ms) that the platform should be at level restart.", default=0)
+    reverse: BoolProperty(name = "Reverse", description = "If the platform should loop backwards (if not using a trigger).")
 
 class InteriorPanel(bpy.types.Panel):
     bl_label = "DIF properties"
@@ -110,17 +132,32 @@ class InteriorPanel(bpy.types.Panel):
     def draw(self, context):
         layout = self.layout
         obj = context
-
         sublayout = layout.row()
-        sublayout.prop(context.object.dif_props, "interior_type")
+        sublayout.prop(context.object.dif_props, "interior_type") #TODO only show this on relevant objects?
+
+        if(isinstance(context.object, bpy.types.Curve)):
+            sublayout = layout.row()
+            sublayout.prop(context.object.dif_props, "marker_type")
+
         if context.object.dif_props.interior_type == "pathed_interior":
             sublayout = layout.row()
             sublayout.prop(context.object.dif_props, "marker_path")
-        if context.object.dif_props.interior_type == "game_entity":
+            sublayout = layout.row()
+            sublayout.prop(context.object.dif_props, "marker_type")
+            sublayout = layout.row()
+            sublayout.prop(context.object.dif_props, "total_time")
+            sublayout = layout.row()
+            sublayout.prop(context.object.dif_props, "start_time")
+            sublayout = layout.row()
+            sublayout.prop(context.object.dif_props, "reverse")
+        if context.object.dif_props.interior_type in ["game_entity", "path_trigger"]:
             sublayout = layout.row()
             sublayout.prop(context.object.dif_props, "game_entity_datablock")
             sublayout = layout.row()
-            sublayout.prop(context.object.dif_props, "game_entity_gameclass")
+            if context.object.dif_props.interior_type == "path_trigger":
+                sublayout.prop(context.object.dif_props, "pathed_interior_target")
+            else:
+                sublayout.prop(context.object.dif_props, "game_entity_gameclass")
             sublayout = layout.row()
             sublayout.label(text="Properties:")
             sublayout = layout.row()

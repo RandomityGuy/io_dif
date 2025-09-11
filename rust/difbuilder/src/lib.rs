@@ -3,24 +3,17 @@
 use std::{
     collections::HashMap,
     ffi::{c_char, CStr, CString},
-    io::Cursor,
     sync::Arc,
     thread,
     time::Instant,
 };
 
-use ::dif::types::Point3F;
 use cgmath::Quaternion;
 use dif::{
-    dif::Dif,
-    game_entity::GameEntity,
-    interior::Interior,
-    interior_path_follower::{InteriorPathFollower, WayPoint},
-    io::{Version, Writable},
-    types::{Dictionary, Point2F},
+    dif::Dif, game_entity::GameEntity, interior::Interior, interior_path_follower::{InteriorPathFollower, WayPoint}, io::{Version, Writable}, trigger::{Trigger, Polyhedron, PolyhedronEdge}, types::{Dictionary, Point2F, Point3F, PlaneF}
 };
 use difbuilder::{
-    builder::{self, ProgressEventListener, Triangle},
+    builder::{self, ProgressEventListener},
     set_convert_configuration,
 };
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
@@ -128,6 +121,9 @@ pub struct TriangleRaw {
 pub struct PathedInteriorImpl {
     pub interior: Interior,
     pub waypoints: Vec<WayPoint>,
+    pub trigger_ids: Vec<u32>,
+    pub properties: Dictionary,
+    pub offset: Point3F,
 }
 
 pub struct DifBuilderImpl {
@@ -137,6 +133,10 @@ pub struct DifBuilderImpl {
 
 pub struct MarkerListImpl {
     pub markers: Vec<WayPoint>,
+}
+
+pub struct TriggerIdListImpl {
+    pub trigger_ids: Vec<u32>,
 }
 
 #[no_mangle]
@@ -196,14 +196,31 @@ pub unsafe extern "C" fn push_marker(
     ptr: *mut MarkerListImpl,
     pos: *const f32,
     ms_to_next: i32,
-    initial_target_position: i32,
+    smoothing_type: u32,
 ) {
     ptr.as_mut().unwrap().markers.push(WayPoint {
         ms_to_next: ms_to_next as u32,
         position: Point3F::new(*pos, *pos.offset(1), *pos.offset(2)),
-        smoothing_type: 0,
+        smoothing_type: smoothing_type,
         rotation: Quaternion::new(1.0, 0.0, 0.0, 0.0),
     });
+}
+
+#[no_mangle]
+pub extern "C" fn new_trigger_id_list() -> *const TriggerIdListImpl {
+    Arc::into_raw(Arc::new(TriggerIdListImpl {
+        trigger_ids: Vec::new(),
+    }))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn dispose_trigger_id_list(ptr: *const TriggerIdListImpl) {
+    Arc::decrement_strong_count(ptr);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn push_trigger_id(ptr: *mut TriggerIdListImpl, trigger_id: u32) {
+    ptr.as_mut().unwrap().trigger_ids.push(trigger_id);
 }
 
 #[no_mangle]
@@ -252,13 +269,133 @@ pub unsafe extern "C" fn add_triangle(
 
 #[no_mangle]
 pub unsafe extern "C" fn add_trigger(
-    ptr: *mut DifBuilderImpl,
-    pos: *const f32,
-    name: *const u8,
-    datablock: *const u8,
+    ptr: *mut Dif,
+    pos_vec: *const f32,
+    size_vec: *const f32,
+    name: *const c_char,
+    datablock: *const c_char,
     props: *const Dictionary,
 ) {
-    // Do nothing
+    let pos = Point3F::new(*pos_vec, *pos_vec.offset(1), *pos_vec.offset(2));
+    let size = Point3F::new(*size_vec, *size_vec.offset(1), *size_vec.offset(2));
+    ptr.as_mut().unwrap().triggers.push(Trigger {
+        name: CStr::from_ptr(name).to_str().unwrap().to_owned(),
+        datablock: CStr::from_ptr(datablock).to_str().unwrap().to_owned(),
+        offset: Point3F::new(0.0, 0.0, 0.0),
+        properties: props.as_ref().unwrap().clone(),
+        polyhedron: Polyhedron {
+            point_list: vec![
+                Point3F::new(pos.x, pos.y, pos.z + size.z),
+                Point3F::new(pos.x, pos.y + size.y, pos.z + size.z),
+                Point3F::new(pos.x + size.x, pos.y + size.y, pos.z + size.z),
+                Point3F::new(pos.x + size.x, pos.y, pos.z + size.z),
+                Point3F::new(pos.x, pos.y, pos.z),
+                Point3F::new(pos.x, pos.y + size.y, pos.z),
+                Point3F::new(pos.x + size.x, pos.y + size.y, pos.z),
+                Point3F::new(pos.x + size.x, pos.y, pos.z),
+            ],
+            plane_list: vec![
+                PlaneF {
+                    normal: Point3F::new(-1.0, 0.0, 0.0),
+                    distance: pos.x,
+                },
+                PlaneF {
+                    normal: Point3F::new(0.0, 1.0, 0.0),
+                    distance: pos.y + size.y,
+                },
+                PlaneF {
+                    normal: Point3F::new(1.0, 0.0, 0.0),
+                    distance: pos.x + size.x,
+                },
+                PlaneF {
+                    normal: Point3F::new(0.0, -1.0, 0.0),
+                    distance: pos.y,
+                },
+                PlaneF {
+                    normal: Point3F::new(0.0, 0.0, 1.0),
+                    distance: pos.z + size.z,
+                },
+                PlaneF {
+                    normal: Point3F::new(0.0, 0.0, -1.0),
+                    distance: pos.z,
+                },
+            ],
+            edge_list: vec![
+                PolyhedronEdge {
+                    face0: 0,
+                    face1: 4,
+                    vertex0: 0,
+                    vertex1: 1,
+                },
+                PolyhedronEdge {
+                    face0: 5,
+                    face1: 0,
+                    vertex0: 4,
+                    vertex1: 5,
+                },
+                PolyhedronEdge {
+                    face0: 3,
+                    face1: 0,
+                    vertex0: 0,
+                    vertex1: 4,
+                },
+                PolyhedronEdge {
+                    face0: 1,
+                    face1: 4,
+                    vertex0: 1,
+                    vertex1: 2,
+                },
+                PolyhedronEdge {
+                    face0: 5,
+                    face1: 6,
+                    vertex0: 5,
+                    vertex1: 1,
+                },
+                PolyhedronEdge {
+                    face0: 0,
+                    face1: 1,
+                    vertex0: 1,
+                    vertex1: 5,
+                },
+                PolyhedronEdge {
+                    face0: 2,
+                    face1: 4,
+                    vertex0: 2,
+                    vertex1: 3,
+                },
+                PolyhedronEdge {
+                    face0: 5,
+                    face1: 2,
+                    vertex0: 6,
+                    vertex1: 7,
+                },
+                PolyhedronEdge {
+                    face0: 1,
+                    face1: 2,
+                    vertex0: 2,
+                    vertex1: 6,
+                },
+                PolyhedronEdge {
+                    face0: 3,
+                    face1: 4,
+                    vertex0: 3,
+                    vertex1: 0,
+                },
+                PolyhedronEdge {
+                    face0: 5,
+                    face1: 3,
+                    vertex0: 7,
+                    vertex1: 4,
+                },
+                PolyhedronEdge {
+                    face0: 2,
+                    face1: 3,
+                    vertex0: 3,
+                    vertex1: 7,
+                },
+            ],
+        },
+    });
 }
 
 #[no_mangle]
@@ -266,10 +403,16 @@ pub unsafe extern "C" fn add_pathed_interior(
     ptr: *mut DifBuilderImpl,
     dif: *mut Dif,
     marker_list: *const MarkerListImpl,
+    trigger_id_list: *const TriggerIdListImpl,
+    props: *const Dictionary,
+    offset: *const f32,
 ) {
-    let mut pathed_interior = PathedInteriorImpl {
+    let pathed_interior = PathedInteriorImpl {
         interior: dif.as_mut().unwrap().interiors.swap_remove(0),
         waypoints: marker_list.as_ref().unwrap().markers.clone(),
+        trigger_ids: trigger_id_list.as_ref().unwrap().trigger_ids.clone(),
+        properties: props.as_ref().unwrap().clone(),
+        offset: Point3F::new(*offset, *offset.offset(1), *offset.offset(2)),
     };
     ptr.as_mut().unwrap().pathed_interiors.push(pathed_interior);
 }
@@ -334,15 +477,15 @@ pub unsafe extern "C" fn build(
             datablock: "PathedDefault".to_owned(),
             interior_res_index: sub_index as u32,
             name: "MustChange".to_owned(),
-            offset: Point3F::new(0.0, 0.0, 0.0),
+            offset: pathed_interior.offset,
             total_ms: pathed_interior
                 .waypoints
                 .iter()
                 .map(|wp| wp.ms_to_next)
                 .sum(),
             way_points: pathed_interior.waypoints.clone(),
-            trigger_ids: vec![],
-            properties: Dictionary::new(),
+            trigger_ids: pathed_interior.trigger_ids.clone(),
+            properties: pathed_interior.properties.clone(),
         });
     }
 
