@@ -255,8 +255,10 @@ def load(
         itr = pathedInteriors[mover.interiorResIndex]
         itr: Object = itr.copy()
         base = scene.collection.objects.link(itr)
-        itr.location = [pos.x, pos.y, pos.z]
+        itr.location = [-pos.x, -pos.y, -pos.z]
         itr.dif_props.interior_type = "pathed_interior"
+        itr.dif_props.start_time = int(mover.properties.h.get("initialPosition", 0))
+        itr.dif_props.reverse = mover.properties.h.get("initialTargetPosition", 0) == "-2"
 
         waypoints: list[WayPoint] = mover.wayPoint
 
@@ -267,10 +269,8 @@ def load(
 
         curve = bpy.data.curves.new("markers", type="CURVE")
         curve.dimensions = "3D"
-        spline = curve.splines.new(type="NURBS")
+        spline = curve.splines.new(type="POLY")
         spline.points.add(len(markerpts) - 1)
-        spline.order_u = 2
-        spline.resolution_u = 20
 
         for p, new_co in zip(spline.points, markerpts):
             p.co = new_co + (1.0,)
@@ -279,6 +279,47 @@ def load(
         scene.collection.objects.link(path)
 
         itr.dif_props.marker_path = curve
+
+        total_time = 0
+        for pt in waypoints:
+            total_time += pt.msToNext
+        itr.dif_props.total_time = total_time
+
+        first_type = waypoints[0].smoothingType
+        if first_type == 0:
+            itr.dif_props.marker_type = "linear"
+        elif first_type == 1:
+            itr.dif_props.marker_type = "spline"
+        elif first_type == 2:
+            itr.dif_props.marker_type = "accelerate"
+
+        for trigger_id in mover.triggerId:
+            trigger = dif.triggers[trigger_id]
+            tobj = bpy.data.objects.new(trigger.datablock, None)
+            tobj.dif_props.interior_type = "path_trigger"
+            tobj.dif_props.pathed_interior_target = itr
+            tobj.dif_props.game_entity_datablock = trigger.datablock
+            for key in trigger.properties.h:
+                prop = tobj.dif_props.game_entity_properties.add()
+                prop.key = key
+                prop.value = trigger.properties.get(key)
+
+            t_min = mathutils.Vector((float('inf'), float('inf'), float('inf')))
+            t_max = mathutils.Vector((-float('inf'), -float('inf'), -float('inf')))
+            for p in trigger.polyhedron.pointList:
+                t_min.x = min(t_min.x, p.x)
+                t_min.y = min(t_min.y, p.y)
+                t_min.z = min(t_min.z, p.z)
+
+                t_max.x = max(t_max.x, p.x)
+                t_max.y = max(t_max.y, p.y)
+                t_max.z = max(t_max.z, p.z)
+
+            tobj.location = t_min
+            tobj.scale = mathutils.Vector((t_max.x - t_min.x, t_max.y - t_min.y, t_max.z - t_min.z))
+            tobj.location.y += tobj.scale.y
+            tobj.location += mathutils.Vector((trigger.offset.x, trigger.offset.y, trigger.offset.z))
+            scene.collection.objects.link(tobj)
 
     if dif.gameEntities != None:
         for ge in dif.gameEntities:
@@ -293,7 +334,7 @@ def load(
                 prop.key = key
                 prop.value = g.properties.get(key)
             scene.collection.objects.link(gobj)
-
+    
     context.view_layer.update()
 
     axis_min = [1000000000] * 3
