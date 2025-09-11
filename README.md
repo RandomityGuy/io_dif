@@ -71,18 +71,21 @@ Located in the object properties panel
 
 - Interior Entity Type:
   - InteriorResource: normal static interior type
-  - PathedInterior: moving platform type interior
-    - Marker Path: a curve object that describes the path of the moving platform
-      - initialPathPosition: set using the "Evaluation Time" parameter located in Curve > Object Data Properties > Path Animation
-      - totalPathTime: time it takes for the moving platform to complete the path, set using the "Frames" parameter located in Curve > Object Data Properties > Path Animation.
+  - PathedInterior: moving platform
+    - Marker Path: a curve object that describes the path of the moving platform. Each point will become a Marker
+    - Marker Type: the smoothing to use on each marker
+    - Total Time: the amount of time to complete the path
+    - Starting Time: the time that the platform should begin
   - Game Entity: represents an entity in the dif such as items
-    - Game Class: the class of the entity such as "Item", "StaticShape",etc
+    - Game Class: the class of the entity such as "Item", "StaticShape", etc
     - Datablock: the datablock of the item.
     - Properties: a list of additional key value pairs which will be set to the object on Create Subs
+  - Path Trigger: represents a trigger that will be added to the MustChange group
+    - Datablock: the trigger datablock, MBG's types are TriggerGotoTarget and TriggerGotoDelayTarget
+    - Pathed Interior: the target object
 
 ## Limitations
 
-- No Trigger support: I tried but Torque was being Torque even when I successfully embedded them into difs.
 - No Game Entity rotation support: there isnt even a rotation field for Game Entities in difs, and torque doesnt even use the rotation field explicitly passed as a property
 
 ## Previews
