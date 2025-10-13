@@ -10,7 +10,7 @@ from pathlib import Path
 
 from bpy.types import Curve, Image, Material, Mesh, Object, ShaderNodeTexImage
 from bpy_extras.wm_utils.progress_report import ProgressReport, ProgressReportSubstep
-from mathutils import Quaternion, Vector
+from mathutils import Quaternion, Vector, Matrix
 
 if platform.system() == "Windows":
     dllpath = os.path.join(os.path.dirname(os.path.realpath(__file__)), "DifBuilderLib.dll")
@@ -104,10 +104,6 @@ def update_status(stop, current, total, status, finish_status):
         stop_progress()
 
 update_status_c = STATUSFN(update_status)
-
-scene = bpy.context.scene
-
-obj = bpy.context.active_object
 
 class MarkerList:
     def __init__(self):
@@ -275,7 +271,20 @@ def get_offset(depsgraph, applymodifiers=True):
     off = [((maxv[i] - minv[i]) / 2) + 50 for i in range(0, 3)]
     return off
 
+
+def formatScale(scale):
+    return "%.5f %.5f %.5f" % (scale[0], scale[1], scale[2])
+
+
+def formatRotation(axis_ang):
+    from math import degrees
+    return "%.5f %.5f %.5f %.5f" % (
+            axis_ang[0][0], 
+            axis_ang[0][1], 
+            axis_ang[0][2],
+            degrees(-axis_ang[1]))
  
+
 class GamePathedInterior:
     def __init__(self, ob: Object, triggers: list[Object], offset, flip, double, usematnames, mbonly=True, bspmode="Fast", pointepsilon=1e-6, planeepsilon=1e-5, splitepsilon=1e-4):
         difbuilder = DifBuilder()
@@ -345,7 +354,6 @@ class GamePathedInterior:
                 if (len(marker_ob.splines[0].bezier_points) != 0)
                 else marker_ob.splines[0].points
             )
-            msToNext = int(ob.dif_props.total_time / (len(marker_pts)-1))
 
             path_type = ob.dif_props.marker_type
             if path_type == "linear":
@@ -360,7 +368,36 @@ class GamePathedInterior:
             if curve_obj:
                 curve_transform = curve_obj.matrix_world
 
+            cum_times = [0] # Used for "target marker" triggers and "start index"
+
             for index, pt in enumerate(marker_pts):
+                if index == len(marker_pts)-1:
+                    msToNext = 0
+                else:
+                    if(ob.dif_props.constant_speed):
+                        p0 = Vector(marker_pts[index].co[:3])
+                        p1 = Vector(marker_pts[index+1].co[:3])
+                        marker_dist = (p1 - p0).length
+
+                        if(ob.dif_props.marker_type == "spline"):
+                            p0 = marker_pts[index-1].co[:3]
+                            p1 = marker_pts[index].co[:3]
+                            p2 = marker_pts[index+1].co[:3]
+                            p3 = marker_pts[(index+2) % len(marker_pts)].co[:3]
+                            length = GamePathedInterior.catmull_rom_length(p0, p1, p2, p3)
+                        else:
+                            length = marker_dist
+                        
+                        if(marker_dist < 0.01):
+                            msToNext = ob.dif_props.pause_duration
+                        else:
+                            msToNext = length / (ob.dif_props.speed / 1000)
+
+                    else:
+                        msToNext = ob.dif_props.total_time / (len(marker_pts)-1)
+
+                    msToNext = int(max(msToNext, 1))
+
                 co = pt.co
                 if len(co) == 4:
                     co = Vector((co.x, co.y, co.z))
@@ -368,16 +405,21 @@ class GamePathedInterior:
                 if(curve_transform):
                     co = curve_transform @ co
 
-                if index == len(marker_pts)-1:
-                    marker_list.push_marker(co, 0, smoothing_type)
-                else:
-                    marker_list.push_marker(co, msToNext, smoothing_type)
+                marker_list.push_marker(co, msToNext, smoothing_type)
+
+                cum_times.append(cum_times[-1]+msToNext)
 
         else:
             marker_list.push_marker(ob.location, ob.dif_props.total_time, 0)
             marker_list.push_marker(ob.location, 0, 0)
 
         trigger_id_list = TriggerIDList()
+
+        if(ob.dif_props.constant_speed):
+            marker_idx = min(ob.dif_props.start_index, len(cum_times)-1)
+            starting_time = cum_times[marker_idx]
+        else:
+            starting_time = ob.dif_props.start_time
 
         if(ob.dif_props.reverse):
             initial_target_position = -2
@@ -387,7 +429,13 @@ class GamePathedInterior:
         for index, trigger in enumerate(triggers):
             if trigger.target_object is ob:
                 trigger_id_list.push_trigger_id(index)
-                initial_target_position = 0
+                initial_target_position = starting_time
+
+                # Update the trigger target time if using "target marker"
+                if(trigger.target_marker): 
+                    marker_idx = min(trigger.target_index, len(cum_times)-1)
+                    trigger.properties.add_kvp("targetTime", str(cum_times[marker_idx]))
+                    trigger.name = "MustChange_m" + str(marker_idx)
 
         ob.to_mesh_clear()
 
@@ -397,11 +445,40 @@ class GamePathedInterior:
 
         propertydict = DIFDict()
         propertydict.add_kvp("initialTargetPosition", str(initial_target_position))
-        propertydict.add_kvp("initialPosition", str(ob.dif_props.start_time))
+        propertydict.add_kvp("initialPosition", str(starting_time))
+
+        if(ob.matrix_world != Matrix.Identity(4)):
+            propertydict.add_kvp("baseScale", formatScale(ob.scale))
+            axis_ang_raw: Vector = ob.matrix_world.to_quaternion().to_axis_angle()
+            propertydict.add_kvp("baseRotation", formatRotation(axis_ang_raw))
 
         self.properties = propertydict
         self.offset = [-(ob.location[i] + offset[i]) for i in range(0, 3)]
 
+    @staticmethod
+    def catmull_rom(t, p0, p1, p2, p3):
+        return 0.5 * ((3*p1 - 3*p2 + p3 - p0)*t*t*t
+            + (2*p0 - 5*p1 + 4*p2 - p3)*t*t
+            + (p2 - p0)*t
+            + 2*p1)
+    
+    @staticmethod
+    def catmull_rom_length(p0, p1, p2, p3, samples=20):
+        total_length = 0
+        last_vec = None
+
+        for i in range(0, samples+1):
+            t = i / samples
+            x = GamePathedInterior.catmull_rom(t, p0[0], p1[0], p2[0], p3[0])
+            y = GamePathedInterior.catmull_rom(t, p0[1], p1[1], p2[1], p3[1])
+            z = GamePathedInterior.catmull_rom(t, p0[2], p1[2], p2[2], p3[2])
+            new_vec = Vector((x, y, z))
+            if last_vec:
+                total_length += (new_vec - last_vec).length
+            last_vec = new_vec
+
+        return total_length
+    
 
 class GameEntity:
     def __init__(self, ob, offset):
@@ -411,18 +488,10 @@ class GameEntity:
         for prop in props.game_entity_properties:
             propertydict.add_kvp(prop.key, prop.value)
 
-        propertydict.add_kvp("scale", "%.5f %.5f %.5f" % (ob.scale[0], ob.scale[1], ob.scale[2]))
+        propertydict.add_kvp("scale", formatScale(ob.scale))
 
         axis_ang_raw: Vector = ob.matrix_world.to_quaternion().to_axis_angle()
-
-        #TODO fix or remove
-        from math import degrees
-        propertydict.add_kvp("rotation", "%.5f %.5f %.5f %.5f" % (
-            axis_ang_raw[0][0], 
-            axis_ang_raw[0][1], 
-            axis_ang_raw[0][2],
-            degrees(axis_ang_raw[1]))
-        )
+        propertydict.add_kvp("rotation", formatRotation(axis_ang_raw))
 
         if props.game_entity_gameclass == "Trigger":
             propertydict.add_kvp("polyhedron", "0 0 0 1 0 0 0 -1 0 0 0 1")
@@ -441,6 +510,9 @@ class GameTrigger:
         for prop in props.game_entity_properties:
             propertydict.add_kvp(prop.key, prop.value)
 
+        #axis_ang_raw: Vector = ob.matrix_world.to_quaternion().to_axis_angle()
+        #propertydict.add_kvp("rotation", formatRotation(axis_ang_raw))
+
         self.position = [ob.location[i] + offset[i] for i in range(0, 3)]
         self.size = [ob.scale[0], -ob.scale[1], ob.scale[2]]
         self.datablock = props.game_entity_datablock
@@ -448,6 +520,8 @@ class GameTrigger:
         self.name = "MustChange"
 
         self.target_object = ob.dif_props.pathed_interior_target
+        self.target_marker = ob.dif_props.target_marker
+        self.target_index = ob.dif_props.target_index
 
 
 def save(
