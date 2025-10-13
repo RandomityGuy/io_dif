@@ -92,7 +92,7 @@ Located in the object properties panel
 
 ## Limitations
 
-- No Game Entity rotation support: there isnt even a rotation field for Game Entities in difs, and torque doesnt even use the rotation field explicitly passed as a property
+- Limited Game Entity rotation support: rotation field is not properly applied to Game Entities in vanilla Torque
 
 ## Previews
 
