@@ -209,6 +209,32 @@ impl BSPPolygon {
         }
     }
 
+    fn classify_poly(&self, plane: &PlaneF) -> i32 {
+        let mut front_count = 0;
+        let mut back_count = 0;
+        let mut on_count = 0;
+        self.indices.iter().for_each(|i| {
+            let pt = self.vertices[*i as usize];
+            let face_dot = pt.dot(plane.normal) + plane.distance;
+            if face_dot > unsafe { BSP_CONFIG.epsilon } {
+                front_count += 1;
+            } else if face_dot < unsafe { -BSP_CONFIG.epsilon } {
+                back_count += 1;
+            } else {
+                on_count += 1;
+            }
+        });
+        if front_count > 0 && back_count == 0 {
+            1 // Is in front
+        } else if front_count == 0 && back_count > 0 {
+            -1 // Is in back
+        } else if front_count == 0 && back_count == 0 && on_count > 0 {
+            0 // Is on the plane
+        } else {
+            2 // Is spanning the plane
+        }
+    }
+
     fn area(&self) -> f32 {
         if self.indices.len() < 2 {
             0.0
@@ -658,6 +684,144 @@ impl DIFBSPNode {
             }
         }
     }
+
+    fn split_new_impl(
+        &mut self,
+        plane_list: &[PlaneF],
+        used_planes: &mut HashSet<usize>,
+        depth: usize,
+        progress_report_callback: &mut dyn ProgressEventListener,
+    ) {
+        let mut unused_planes = false;
+        for brush in self.brush_list.iter() {
+            if !brush.used_plane {
+                unused_planes = true;
+                break;
+            }
+        }
+        let mut total_faces = 0;
+        let mut remaining_faces = 0;
+        for brush in self.brush_list.iter() {
+            if !brush.used_plane {
+                remaining_faces += 1;
+            }
+            total_faces += 1;
+        }
+
+        if unused_planes && self.plane_index == None {
+            let split_plane = match unsafe { &BSP_CONFIG.split_method } {
+                SplitMethod::Fast => self.select_best_splitter(plane_list),
+                SplitMethod::Exhaustive => self.select_best_splitter_new(plane_list),
+                _ => {
+                    panic!("Should never reach here!")
+                }
+            };
+
+            if let Some(split_plane) = split_plane {
+                self.plane_index = Some(split_plane);
+
+                // Classify each brush as front, back, or coinciding
+                let mut front_brushes: Vec<BSPPolygon> = vec![];
+                let mut back_brushes: Vec<BSPPolygon> = vec![];
+
+                self.brush_list.iter().for_each(|b| {
+                    if b.plane_id == split_plane {
+                        // Coinciding, put in back for now
+                        let mut cl = b.clone();
+                        cl.used_plane = true;
+                        back_brushes.push(cl);
+                    } else {
+                        let classify_score = b.classify_poly(&plane_list[split_plane]);
+
+                        if classify_score == 1 {
+                            front_brushes.push(b.clone());
+                        } else if classify_score == -1 {
+                            back_brushes.push(b.clone());
+                        } else if classify_score == 0 {
+                            // Coinciding, put in back for now
+                            let mut cl = b.clone();
+                            cl.used_plane = true;
+                            back_brushes.push(cl);
+                        } else if classify_score == 2 {
+                            // Spanning, split it
+                            let [front_brush, back_brush] = b.split(split_plane, plane_list);
+                            if front_brush.indices.len() > 2 {
+                                front_brushes.push(front_brush);
+                            }
+                            if back_brush.indices.len() > 2 {
+                                back_brushes.push(back_brush);
+                            }
+                        }
+                    }
+                });
+
+                if !used_planes.contains(&split_plane) {
+                    used_planes.insert(split_plane);
+                    progress_report_callback.progress(
+                        used_planes.len() as u32,
+                        plane_list.len() as u32,
+                        "Building BSP".to_string(),
+                        "Built BSP".to_string(),
+                    );
+                }
+
+                if front_brushes.len() != 0 {
+                    let front_node = DIFBSPNode {
+                        front: None,
+                        back: None,
+                        avail_planes: front_brushes
+                            .iter()
+                            .filter(|b| b.plane_id != split_plane && !b.used_plane)
+                            .map(|b| b.plane_id)
+                            .collect::<HashSet<_>>()
+                            .into_iter()
+                            .collect::<Vec<_>>(),
+                        brush_list: front_brushes,
+                        solid: false,
+                        plane_index: None,
+                    };
+                    self.front = Some(Box::new(front_node));
+                }
+                if back_brushes.len() != 0 {
+                    let back_node = DIFBSPNode {
+                        front: None,
+                        back: None,
+                        solid: false,
+                        avail_planes: back_brushes
+                            .iter()
+                            .filter(|b| b.plane_id != split_plane && !b.used_plane)
+                            .map(|b| b.plane_id)
+                            .collect::<HashSet<_>>()
+                            .into_iter()
+                            .collect::<Vec<_>>(),
+                        brush_list: back_brushes,
+                        plane_index: None,
+                    };
+                    self.back = Some(Box::new(back_node));
+                }
+
+                self.brush_list.clear();
+                self.avail_planes.clear();
+
+                if let Some(ref mut n) = self.front {
+                    n.brush_list.iter_mut().for_each(|b| {
+                        if b.plane_id == split_plane {
+                            b.used_plane = true;
+                        }
+                    });
+                    n.split_new_impl(plane_list, used_planes, depth + 1, progress_report_callback);
+                };
+                if let Some(ref mut n) = self.back {
+                    n.brush_list.iter_mut().for_each(|b| {
+                        if b.plane_id == split_plane {
+                            b.used_plane = true;
+                        }
+                    });
+                    n.split_new_impl(plane_list, used_planes, depth + 1, progress_report_callback);
+                };
+            }
+        }
+    }
 }
 
 pub fn build_bsp(
@@ -726,7 +890,7 @@ pub fn build_bsp(
         root.plane_index = Some(0);
     } else {
         let mut used_planes: HashSet<usize> = HashSet::new();
-        root.split(&plane_list, &mut used_planes, 0, progress_report_callback);
+        root.split_new_impl(&plane_list, &mut used_planes, 0, progress_report_callback);
     }
     (root, plane_list)
 }
