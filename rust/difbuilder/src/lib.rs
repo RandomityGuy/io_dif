@@ -10,7 +10,13 @@ use std::{
 
 use cgmath::Quaternion;
 use dif::{
-    dif::Dif, game_entity::GameEntity, interior::Interior, interior_path_follower::{InteriorPathFollower, WayPoint}, io::{Version, Writable}, trigger::{Trigger, Polyhedron, PolyhedronEdge}, types::{Dictionary, Point2F, Point3F, PlaneF}
+    dif::Dif,
+    game_entity::GameEntity,
+    interior::Interior,
+    interior_path_follower::{InteriorPathFollower, WayPoint},
+    io::{Version, Writable},
+    trigger::{Polyhedron, PolyhedronEdge, Trigger},
+    types::{Dictionary, PlaneF, Point2F, Point3F},
 };
 use difbuilder::{
     builder::{self, ProgressEventListener},
@@ -463,8 +469,8 @@ pub unsafe extern "C" fn build(
     // Write the report
     println!("BSP Report");
     println!(
-        "Raycast Coverage: {}/{} ({}% of surface area)",
-        r.hit, r.total, r.hit_area_percentage
+        "Raycast Coverage: {}/{} ({}% of surface area), RMSE: {}, MAE: {}, Maximum Error: {}",
+        r.hit, r.total, r.hit_area_percentage, r.rmse, r.mae, r.max_err
     );
     println!("Balance Factor: {}", r.balance_factor);
 

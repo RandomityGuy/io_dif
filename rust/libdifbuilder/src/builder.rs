@@ -35,6 +35,9 @@ pub struct BSPReport {
     pub hit: i32,
     pub total: usize,
     pub hit_area_percentage: f32,
+    pub rmse: f32,
+    pub mae: f32,
+    pub max_err: f32,
 }
 
 #[derive(Clone)]
@@ -175,6 +178,9 @@ impl DIFBuilder {
                 hit: 0,
                 total: 0,
                 hit_area_percentage: 0.0,
+                rmse: 0.0,
+                mae: 0.0,
+                max_err: 0.0,
             },
         };
     }
@@ -190,6 +196,12 @@ impl DIFBuilder {
         norm: Point3F,
         material: String,
     ) {
+        // Check for degenerate triangles and just don't add them
+        let area = 0.5 * ((v2 - v1).cross(v3 - v1)).magnitude();
+        if area.abs_diff_eq(&0.0, unsafe { PLANE_EPSILON }) {
+            return;
+        }
+
         let p = PlaneF {
             normal: norm,
             distance: -norm.dot(v1),
@@ -1799,7 +1811,7 @@ pub trait RaycastCalc {
         plane_index: &u16,
         start: Point3F,
         end: Point3F,
-    ) -> bool;
+    ) -> Option<Point3F>;
 
     fn calculate_bsp_raycast_coverage(&mut self) -> BSPReport;
 }
@@ -1809,6 +1821,9 @@ impl RaycastCalc for Interior {
         let mut hit = 0;
         let mut total_surface_area = 0.0;
         let mut hit_surface_area = 0.0;
+        let mut rmse = 0.0;
+        let mut mae = 0.0;
+        let mut max_err: f32 = 0.0;
         self.surfaces.iter().enumerate().for_each(|(_, s)| {
             let points = &self.indices[(*s.winding_start.inner() as usize)
                 ..((*s.winding_start.inner() + s.winding_count) as usize)]
@@ -1831,6 +1846,8 @@ impl RaycastCalc for Interior {
             let norm =
                 self.normals[*self.planes[plane_index as usize].normal_index.inner() as usize];
 
+            let plane_d = self.planes[plane_index as usize].plane_distance;
+
             let start = avg_point
                 + (norm
                     * match s.plane_flipped {
@@ -1852,9 +1869,19 @@ impl RaycastCalc for Interior {
                 solid: false,
             };
 
-            if self.bsp_ray_cast(&start_node_index, &pidx, start, end) {
+            // Calcuate intersection of this ray described by start and end, with the plane
+            let expected_point =
+                start + (end - start) * (-plane_d - start.dot(norm)) / (end - start).dot(norm);
+
+            if let Some(v) = self.bsp_ray_cast(&start_node_index, &pidx, start, end) {
                 hit += 1;
                 hit_surface_area += surface_area;
+
+                let diff = (v - expected_point).magnitude();
+
+                mae += diff;
+                rmse += diff * diff;
+                max_err = max_err.max(diff);
             } else {
                 // println!("Miss: surface {} plane {}", i, plane_index);
                 // self.bsp_ray_cast(&start_node_index, &pidx, start, end);
@@ -1865,6 +1892,9 @@ impl RaycastCalc for Interior {
             balance_factor: 0,
             total: self.surfaces.len(),
             hit_area_percentage: (hit_surface_area / total_surface_area) * 100.0,
+            rmse: (rmse / self.surfaces.len() as f32).sqrt(),
+            mae: (mae / self.surfaces.len() as f32),
+            max_err,
         }
     }
 
@@ -1874,7 +1904,7 @@ impl RaycastCalc for Interior {
         plane_index: &u16,
         start: Point3F,
         end: Point3F,
-    ) -> bool {
+    ) -> Option<Point3F> {
         if !node.leaf {
             use std::cmp::Ordering;
             let node_value = &self.bsp_nodes[node.index as usize];
@@ -1905,8 +1935,10 @@ impl RaycastCalc for Interior {
                     let intersect_t =
                         (-plane_d - start.dot(plane_norm)) / (end - start).dot(plane_norm);
                     let ip = start + (end - start) * intersect_t;
-                    if self.bsp_ray_cast(&node_value.front_index, &plane_index, start, ip) {
-                        return true;
+                    if let Some(v) =
+                        self.bsp_ray_cast(&node_value.front_index, &plane_index, start, ip)
+                    {
+                        return Some(v);
                     }
                     self.bsp_ray_cast(
                         &node_value.back_index,
@@ -1919,8 +1951,10 @@ impl RaycastCalc for Interior {
                     let intersect_t =
                         (-plane_d - start.dot(plane_norm)) / (end - start).dot(plane_norm);
                     let ip = start + (end - start) * intersect_t;
-                    if self.bsp_ray_cast(&node_value.back_index, &plane_index, start, ip) {
-                        return true;
+                    if let Some(v) =
+                        self.bsp_ray_cast(&node_value.back_index, &plane_index, start, ip)
+                    {
+                        return Some(v);
                     }
                     self.bsp_ray_cast(
                         &node_value.front_index,
@@ -1935,13 +1969,17 @@ impl RaycastCalc for Interior {
                     self.bsp_ray_cast(&node_value.back_index, &plane_index, start, end)
                 }
                 (Ordering::Equal, Ordering::Equal) => {
-                    if self.bsp_ray_cast(&node_value.front_index, &plane_index, start, end) {
-                        return true;
+                    if let Some(v) =
+                        self.bsp_ray_cast(&node_value.front_index, &plane_index, start, end)
+                    {
+                        return Some(v);
                     }
-                    if self.bsp_ray_cast(&node_value.back_index, &plane_index, start, end) {
-                        return true;
+                    if let Some(v) =
+                        self.bsp_ray_cast(&node_value.back_index, &plane_index, start, end)
+                    {
+                        return Some(v);
                     }
-                    false
+                    None
                 }
             }
         } else if node.solid {
@@ -1962,11 +2000,11 @@ impl RaycastCalc for Interior {
                 };
             });
             if found == 0 {
-                return false;
+                return None;
             }
-            return true;
+            return Some(start);
         } else {
-            return false;
+            return None;
         }
     }
 }
