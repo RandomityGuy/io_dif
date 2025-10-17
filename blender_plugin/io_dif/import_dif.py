@@ -259,6 +259,7 @@ def load(
         itr.dif_props.interior_type = "pathed_interior"
         itr.dif_props.start_time = int(mover.properties.h.get("initialPosition", 0))
         itr.dif_props.reverse = mover.properties.h.get("initialTargetPosition", 0) == "-2"
+        itr.dif_props.constant_speed = False
 
         waypoints: list[WayPoint] = mover.wayPoint
 
@@ -299,6 +300,7 @@ def load(
             tobj.dif_props.interior_type = "path_trigger"
             tobj.dif_props.pathed_interior_target = itr
             tobj.dif_props.game_entity_datablock = trigger.datablock
+            tobj.dif_props.target_marker = False
             for key in trigger.properties.h:
                 prop = tobj.dif_props.game_entity_properties.add()
                 prop.key = key

@@ -45,7 +45,7 @@ bl_info = {
     "author": "RandomityGuy",
     "description": "Dif import and export plugin for blender",
     "blender": (2, 80, 0),
-    "version": (1, 3, 2),
+    "version": (1, 3, 3),
     "location": "File > Import-Export",
     "warning": "",
     "category": "Import-Export",
@@ -88,6 +88,7 @@ def set_marker_path(self, context):
             spline.type = 'POLY'
 
 class InteriorSettings(bpy.types.PropertyGroup):
+    # Interiors
     interior_type: EnumProperty(
         name="Interior Entity Type",
         items=(
@@ -99,15 +100,15 @@ class InteriorSettings(bpy.types.PropertyGroup):
         default="static_interior",
         description="How this object should be interpreted for the exporter.",
     )
-    
     marker_path: PointerProperty(type=bpy.types.Curve, name="Marker Path", description="The path to create markers from.", update=set_marker_path)
-    pathed_interior_target: PointerProperty(type=bpy.types.Object, name="Pathed Interior Target", description="The platform to trigger.")
-    game_entity_datablock: StringProperty(name="Datablock")
-    game_entity_gameclass: StringProperty(name="Game Class")
-    game_entity_properties: CollectionProperty(
-        type=InteriorKVP, name="Custom Properties"
-    )
-    
+    constant_speed: BoolProperty(name = "Constant Speed", description = "If the marker durations should be based on speed instead of total time.", default=True)
+    speed: FloatProperty(name="Speed", description="The speed that the platform should be moving at. If using Accelerate smoothing, this is max speed.", default=1, min=0.01, max=100)
+    total_time: IntProperty(name="Total Time", description="The total time (in ms) from path start to end. Equally divided across each marker on export.", default=3000, min=1)
+    start_time: IntProperty(name="Start Time", description="The time in the path (in ms) that the platform should be at level restart.", default=0, min=0)
+    start_index: IntProperty(name="Start Index", description="The marker that the platform should be at level restart (0 is 1st marker).", default=0, min=0, soft_max=10)
+    pause_duration: IntProperty(name = "Pause Duration", description="At a path segment of length 0, the platform will wait this long (in ms).", default=0, min=0, soft_max=10000)
+    reverse: BoolProperty(name = "Reverse", description = "If the platform should loop backwards (if not using a trigger).")
+
     marker_type: EnumProperty(
         name="Marker Type",
         items=(
@@ -118,9 +119,18 @@ class InteriorSettings(bpy.types.PropertyGroup):
         description="The type of smoothing that should be applied to all markers exported from the path.",
     )
 
-    total_time: IntProperty(name="Total Time", description="The total time (in ms) from path start to end. Equally divided across each marker on export.", default=3000)
-    start_time: IntProperty(name="Starting Time", description="The time in the path (in ms) that the platform should be at level restart.", default=0)
-    reverse: BoolProperty(name = "Reverse", description = "If the platform should loop backwards (if not using a trigger).")
+    # Triggers
+    pathed_interior_target: PointerProperty(type=bpy.types.Object, name="Pathed Interior Target", description="The platform to trigger.")
+    target_marker: BoolProperty(name = "Calculate Target Time", description="If enabled, the targetTime will be calculated to be at a specific marker.", default=True)
+    target_index: IntProperty(name = "Target Index", description="The marker to target (0 is 1st marker).", default=0, min=0, soft_max=10)
+    
+    # Entities
+    game_entity_datablock: StringProperty(name="Datablock")
+    game_entity_gameclass: StringProperty(name="Game Class")
+    game_entity_properties: CollectionProperty(
+        type=InteriorKVP, name="Custom Properties"
+    )
+
 
 class InteriorPanel(bpy.types.Panel):
     bl_label = "DIF properties"
@@ -131,7 +141,6 @@ class InteriorPanel(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        obj = context
         sublayout = layout.row()
         sublayout.prop(context.object.dif_props, "interior_type") #TODO only show this on relevant objects?
 
@@ -145,17 +154,35 @@ class InteriorPanel(bpy.types.Panel):
             sublayout = layout.row()
             sublayout.prop(context.object.dif_props, "marker_type")
             sublayout = layout.row()
-            sublayout.prop(context.object.dif_props, "total_time")
+            sublayout.prop(context.object.dif_props, "constant_speed")
             sublayout = layout.row()
-            sublayout.prop(context.object.dif_props, "start_time")
-            sublayout = layout.row()
+            if context.object.dif_props.constant_speed:
+                sublayout.prop(context.object.dif_props, "speed")
+                sublayout = layout.row()
+                sublayout.prop(context.object.dif_props, "start_index")
+                sublayout = layout.row()
+                sublayout.prop(context.object.dif_props, "pause_duration")
+                sublayout = layout.row()
+            else:
+                sublayout.prop(context.object.dif_props, "total_time")
+                sublayout = layout.row()
+                sublayout.prop(context.object.dif_props, "start_time")
+                sublayout = layout.row()
+
             sublayout.prop(context.object.dif_props, "reverse")
+
         if context.object.dif_props.interior_type in ["game_entity", "path_trigger"]:
             sublayout = layout.row()
             sublayout.prop(context.object.dif_props, "game_entity_datablock")
             sublayout = layout.row()
             if context.object.dif_props.interior_type == "path_trigger":
                 sublayout.prop(context.object.dif_props, "pathed_interior_target")
+                sublayout = layout.row()
+                sublayout.prop(context.object.dif_props, "target_marker")
+                sublayout = layout.row()
+                if context.object.dif_props.target_marker:
+                    sublayout.prop(context.object.dif_props, "target_index")
+                    sublayout = layout.row()
             else:
                 sublayout.prop(context.object.dif_props, "game_entity_gameclass")
             sublayout = layout.row()
@@ -204,7 +231,7 @@ class ImportCSX(bpy.types.Operator, ImportHelper):
             )
         )
 
-        if bpy.data.is_saved and context.user_preferences.filepaths.use_relative_paths:
+        if bpy.data.is_saved and context.preferences.filepaths.use_relative_paths:
             import os
 
             keywords["relpath"] = os.path.dirname(bpy.data.filepath)
@@ -242,7 +269,7 @@ class ImportDIF(bpy.types.Operator, ImportHelper):
             )
         )
 
-        if bpy.data.is_saved and context.user_preferences.filepaths.use_relative_paths:
+        if bpy.data.is_saved and context.preferences.filepaths.use_relative_paths:
             import os
 
             keywords["relpath"] = os.path.dirname(bpy.data.filepath)

@@ -1,7 +1,7 @@
 # IO DIF
 
 Blender plugin to import and export MBG Torque DIF interiors and Torque Constructor CSX files.
-Supported Blender Versions: 2.8.0 to 4.3
+Supported Blender Versions: 2.8.0 to 4.5
 
 ## Note
 
@@ -75,7 +75,11 @@ Located in the object properties panel
     - Marker Path: a curve object that describes the path of the moving platform. Each point will become a Marker
     - Marker Type: the smoothing to use on each marker
     - Total Time: the amount of time to complete the path
-    - Starting Time: the time that the platform should begin
+    - Start Time: the time that the platform should begin
+    - Constant Speed: if the marker durations should instead be calculated to maintain a consistent speed
+      - Speed: max speed in units per second
+      - Start Index: Calculates Start Time based on marker index
+      - Pause Duration: The time that the platform should spend at zero-length segments
   - Game Entity: represents an entity in the dif such as items
     - Game Class: the class of the entity such as "Item", "StaticShape", etc
     - Datablock: the datablock of the item.
@@ -83,10 +87,12 @@ Located in the object properties panel
   - Path Trigger: represents a trigger that will be added to the MustChange group
     - Datablock: the trigger datablock, MBG's types are TriggerGotoTarget and TriggerGotoDelayTarget
     - Pathed Interior: the target object
+    - Calculate Target Time: if targetTime property should be created from a target marker index
+      - Target Index: the marker to target
 
 ## Limitations
 
-- No Game Entity rotation support: there isnt even a rotation field for Game Entities in difs, and torque doesnt even use the rotation field explicitly passed as a property
+- Limited Game Entity rotation support: rotation field is not properly applied to Game Entities in vanilla Torque
 
 ## Previews
 
