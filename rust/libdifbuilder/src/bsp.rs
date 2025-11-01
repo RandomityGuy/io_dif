@@ -68,18 +68,12 @@ impl BSPPolygon {
                 }
             }
         }
-        let unique_points = self
-            .indices
-            .iter()
-            .collect::<HashSet<_>>()
-            .into_iter()
-            .collect::<Vec<_>>();
-
+        let epsilon = unsafe { BSP_CONFIG.epsilon };
         let test_plane = &plane_list[plane_id as usize];
         let mut max_front = 0.0;
         let mut min_back = 0.0;
-        unique_points.iter().for_each(|p| {
-            let pt = self.vertices[**p as usize];
+        for &idx in &self.indices {
+            let pt = self.vertices[idx];
             let d = test_plane.normal.dot(pt) + test_plane.distance;
             if d > max_front {
                 max_front = d;
@@ -87,18 +81,19 @@ impl BSPPolygon {
             if d < min_back {
                 min_back = d;
             }
-        });
+        }
+
         let mut front = 0;
         let mut back = 0;
         let mut splits = 0;
         let mut tiny_windings = 0;
-        if max_front > unsafe { BSP_CONFIG.epsilon } {
+        if max_front > epsilon {
             front = 1;
         }
-        if min_back < -unsafe { BSP_CONFIG.epsilon } {
+        if min_back < -epsilon {
             back = 1;
         }
-        if max_front > unsafe { BSP_CONFIG.epsilon } && min_back < -unsafe { BSP_CONFIG.epsilon } {
+        if max_front > epsilon && min_back < -epsilon {
             splits = 1;
         }
         if (max_front > 0.0 && max_front < 1.0) || (min_back < 0.0 && min_back > -1.0) {
@@ -131,38 +126,38 @@ impl BSPPolygon {
     }
 
     fn clip_plane(&mut self, plane: usize, plane_list: &[PlaneF], flip_face: bool) {
-        let mut new_vertices = self.vertices.clone();
+        let mut vertices = std::mem::take(&mut self.vertices);
+        let original_indices = std::mem::take(&mut self.indices);
         let mut plane_value = plane_list[plane].clone();
         if flip_face {
             plane_value.normal *= -1.0;
             plane_value.distance *= -1.0;
         }
 
-        let mut new_indices: Vec<usize> = vec![];
+        let mut new_indices: Vec<usize> = Vec::with_capacity(original_indices.len());
         let mut _points_on_plane = 0;
-        for i in 0..self.indices.len() {
-            let v1 = &self.vertices[self.indices[i] as usize];
-            let v2 = &self.vertices[self.indices[(i + 1) % self.indices.len()] as usize];
+        let epsilon = unsafe { BSP_CONFIG.epsilon };
+        for i in 0..original_indices.len() {
+            let v1 = &vertices[original_indices[i] as usize];
+            let v2 = &vertices[original_indices[(i + 1) % original_indices.len()] as usize];
             let d1 = v1.dot(plane_value.normal) + plane_value.distance;
             let d2 = v2.dot(plane_value.normal) + plane_value.distance;
-            if d1 > unsafe { BSP_CONFIG.epsilon } {
+            if d1 > epsilon {
                 // Ignore
             }
-            if d1 <= unsafe { BSP_CONFIG.epsilon } {
+            if d1 <= epsilon {
                 // Keep
-                new_indices.push(self.indices[i]);
+                new_indices.push(original_indices[i]);
             }
-            if d1.abs() < unsafe { BSP_CONFIG.epsilon } {
+            if d1.abs() < epsilon {
                 _points_on_plane += 1;
             }
-            if (d1 > unsafe { BSP_CONFIG.epsilon } && d2 < -unsafe { BSP_CONFIG.epsilon })
-                || (d1 < -unsafe { BSP_CONFIG.epsilon } && d2 > unsafe { BSP_CONFIG.epsilon })
-            {
+            if (d1 > epsilon && d2 < -epsilon) || (d1 < -epsilon && d2 > epsilon) {
                 let t = (-plane_value.distance - plane_value.normal.dot(*v1))
                     / plane_value.normal.dot(v2 - v1);
                 let v3 = v1 + (v2 - v1) * t;
-                new_indices.push(new_vertices.len());
-                new_vertices.push(v3);
+                new_indices.push(vertices.len());
+                vertices.push(v3);
             }
         }
         // if clip_face && points_on_plane == face.indices.len() {
@@ -171,14 +166,14 @@ impl BSPPolygon {
         // Sanity check
         let test_epsilon = unsafe { BSP_CONFIG.epsilon * 10.0 };
         for idx in new_indices.iter() {
-            let pt = new_vertices[*idx as usize];
+            let pt = vertices[*idx as usize];
             let d = plane_value.normal.dot(pt) + plane_value.distance;
             if d > test_epsilon {
                 assert!(false, "Invalid CLIP of {} (epsilon: {})", d, test_epsilon);
             }
         }
 
-        self.vertices = new_vertices;
+        self.vertices = vertices;
         self.indices = new_indices;
         self.area_calc = self.area();
     }
@@ -724,24 +719,22 @@ impl DIFBSPNode {
                 let mut front_brushes: Vec<BSPPolygon> = vec![];
                 let mut back_brushes: Vec<BSPPolygon> = vec![];
 
-                self.brush_list.iter().for_each(|b| {
+                for mut b in std::mem::take(&mut self.brush_list) {
                     if b.plane_id == split_plane {
                         // Coinciding, put in back for now
-                        let mut cl = b.clone();
-                        cl.used_plane = true;
-                        back_brushes.push(cl);
+                        b.used_plane = true;
+                        back_brushes.push(b);
                     } else {
                         let classify_score = b.classify_poly(&plane_list[split_plane]);
 
                         if classify_score == 1 {
-                            front_brushes.push(b.clone());
+                            front_brushes.push(b);
                         } else if classify_score == -1 {
-                            back_brushes.push(b.clone());
+                            back_brushes.push(b);
                         } else if classify_score == 0 {
                             // Coinciding, put in back for now
-                            let mut cl = b.clone();
-                            cl.used_plane = true;
-                            back_brushes.push(cl);
+                            b.used_plane = true;
+                            // back_brushes.push(cl);
                         } else if classify_score == 2 {
                             // Spanning, split it
                             let [front_brush, back_brush] = b.split(split_plane, plane_list);
@@ -753,7 +746,7 @@ impl DIFBSPNode {
                             }
                         }
                     }
-                });
+                }
 
                 if !used_planes.contains(&split_plane) {
                     used_planes.insert(split_plane);

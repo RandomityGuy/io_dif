@@ -284,6 +284,8 @@ def formatRotation(axis_ang):
             axis_ang[0][2],
             degrees(-axis_ang[1]))
  
+def is_degenerate_triangle(p1: Vector, p2: Vector, p3: Vector):
+    return (p1 - p2).cross(p1 - p3).length < 1e-6
 
 class GamePathedInterior:
     def __init__(self, ob: Object, triggers: list[Object], offset, flip, double, usematnames, mbonly=True, bspmode="Fast", pointepsilon=1e-6, planeepsilon=1e-5, splitepsilon=1e-4):
@@ -308,6 +310,9 @@ class GamePathedInterior:
             rawp1 = mesh_verts[tri.vertices[0]].co
             rawp2 = mesh_verts[tri.vertices[1]].co
             rawp3 = mesh_verts[tri.vertices[2]].co
+
+            if is_degenerate_triangle(Vector(rawp1), Vector(rawp2), Vector(rawp3)):
+                continue
 
             p1 = [rawp1[i] + offset[i] for i in range(0, 3)]
             p2 = [rawp2[i] + offset[i] for i in range(0, 3)]
@@ -581,6 +586,9 @@ def save(
             rawp1 = mesh_verts[tri.vertices[0]].co
             rawp2 = mesh_verts[tri.vertices[1]].co
             rawp3 = mesh_verts[tri.vertices[2]].co
+
+            if is_degenerate_triangle(Vector(rawp1), Vector(rawp2), Vector(rawp3)):
+                continue
 
             p1 = [rawp1[i] + offset[i] for i in range(0, 3)]
             p2 = [rawp2[i] + offset[i] for i in range(0, 3)]
