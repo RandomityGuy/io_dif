@@ -2095,14 +2095,64 @@ fn solve_matrix(
     use nalgebra::base::DMatrix;
     use nalgebra::SVD;
 
+    // use min-max scaling to improve numerical stability
+    let min_x = point0.x.min(point1.x).min(point2.x);
+    let max_x = point0.x.max(point1.x).max(point2.x);
+    let min_y = point0.y.min(point1.y).min(point2.y);
+    let max_y = point0.y.max(point1.y).max(point2.y);
+    let min_z = point0.z.min(point1.z).min(point2.z);
+    let max_z = point0.z.max(point1.z).max(point2.z);
+    let scale_x = if (max_x - min_x).abs() < 1e-8 {
+        1.0
+    } else {
+        1.0 / (max_x - min_x)
+    };
+    let scale_y = if (max_y - min_y).abs() < 1e-8 {
+        1.0
+    } else {
+        1.0 / (max_y - min_y)
+    };
+    let scale_z = if (max_z - min_z).abs() < 1e-8 {
+        1.0
+    } else {
+        1.0 / (max_z - min_z)
+    };
+
+    let scaled_point0 = Vector3 {
+        x: (point0.x - min_x) * scale_x,
+        y: (point0.y - min_y) * scale_y,
+        z: (point0.z - min_z) * scale_z,
+    };
+
+    let scaled_point1 = Vector3 {
+        x: (point1.x - min_x) * scale_x,
+        y: (point1.y - min_y) * scale_y,
+        z: (point1.z - min_z) * scale_z,
+    };
+
+    let scaled_point2 = Vector3 {
+        x: (point2.x - min_x) * scale_x,
+        y: (point2.y - min_y) * scale_y,
+        z: (point2.z - min_z) * scale_z,
+    };
+
     // Define the matrix A (3x4) with 3 vertices and the extra 1s column
     let a = DMatrix::from_row_slice(
         3,
         4,
         &[
-            point0.x, point0.y, point0.z, 1.0, // Vertex 1: (1, 2, 3, 1)
-            point1.x, point1.y, point1.z, 1.0, // Vertex 2: (4, 5, 6, 1)
-            point2.x, point2.y, point2.z, 1.0, // Vertex 3: (7, 8, 9, 1)
+            scaled_point0.x,
+            scaled_point0.y,
+            scaled_point0.z,
+            1.0, // Vertex 1: (1, 2, 3, 1)
+            scaled_point1.x,
+            scaled_point1.y,
+            scaled_point1.z,
+            1.0, // Vertex 2: (4, 5, 6, 1)
+            scaled_point2.x,
+            scaled_point2.y,
+            scaled_point2.z,
+            1.0, // Vertex 3: (7, 8, 9, 1)
         ],
     );
 
@@ -2126,8 +2176,30 @@ fn solve_matrix(
         .expect("Pseudoinverse failed");
 
     // Solve for x using the pseudoinverse: x = A+ * y
-    let x = &a_pseudo * u;
+    let mut x = &a_pseudo * u;
 
+    // rescale solution back to original space
+    x[0] = x[0] * scale_x;
+    x[1] = x[1] * scale_y;
+    x[2] = x[2] * scale_z;
+    x[3] = x[3] - x[0] * min_x - x[1] * min_y - x[2] * min_z;
+
+    // verify solution closeness
+    let _uv0_check = x[0] * point0.x + x[1] * point0.y + x[2] * point0.z + x[3];
+    let _uv1_check = x[0] * point1.x + x[1] * point1.y + x[2] * point1.z + x[3];
+    let _uv2_check = x[0] * point2.x + x[1] * point2.y + x[2] * point2.z + x[3];
+
+    if !(_uv0_check.abs_diff_eq(&uv0, 0.001)
+        && _uv1_check.abs_diff_eq(&uv1, 0.001)
+        && _uv2_check.abs_diff_eq(&uv2, 0.001))
+    {
+        println!(
+            "SVD solution not accurate enough, {} {} {} vs {} {} {}",
+            _uv0_check, _uv1_check, _uv2_check, uv0, uv1, uv2
+        );
+        println!("Points: \n{:?}\n{:?}\n{:?}", point0, point1, point2);
+        println!("UVs: \n{}\n{}\n{}", uv0, uv1, uv2);
+    }
     return PlaneF {
         normal: Vector3 {
             x: x[0] as f32,
