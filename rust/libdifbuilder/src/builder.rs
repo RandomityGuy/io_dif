@@ -2094,26 +2094,21 @@ fn solve_matrix(
 ) -> PlaneF {
     // We want to find a, b, c, d such that:
     //   a*x + b*y + c*z + d = uv
-    // for each of the 3 vertices. This is 3 equations with 4 unknowns.
+    // for each of the 3 vertices.
     //
-    // Rewrite as: a*(x - x0) + b*(y - y0) + c*(z - z0) = uv - uv0
-    // by subtracting the first equation from the others, we get a 2x3 system.
-    // The third constraint comes from the fact that the three points are coplanar,
-    // so we can decompose the solution along two edge directions.
-    //
-    // Instead, use barycentric approach: express uv as affine function of position.
-    // uv = uv0 + grad · (p - p0), where grad is a 3D vector.
-    // This gives us:
-    //   grad · (p1 - p0) = uv1 - uv0
-    //   grad · (p2 - p0) = uv2 - uv0
-    // grad lies in the plane of the triangle. Let e1 = p1-p0, e2 = p2-p0, n = e1×e2.
-    // grad = alpha * e1 + beta * e2 (no component along n).
-    // Substituting:
-    //   alpha*(e1·e1) + beta*(e2·e1) = uv1 - uv0
-    //   alpha*(e1·e2) + beta*(e2·e2) = uv2 - uv0
+    // Using barycentric approach: express uv as affine function of position.
+    // uv = uv0 + grad · (p - p0), where grad is a 3D vector in the triangle plane.
+    // grad = alpha * e1 + beta * e2, solving a 2x2 Gram system.
 
-    let e1 = point1 - point0;
-    let e2 = point2 - point0;
+    // Translate to centroid to reduce floating-point cancellation,
+    // especially when points lie on axial planes (e.g. all z identical).
+    let centroid = (point0 + point1 + point2) / 3.0;
+    let p0 = point0 - centroid;
+    let p1 = point1 - centroid;
+    let p2 = point2 - centroid;
+
+    let e1 = p1 - p0;
+    let e2 = p2 - p0;
 
     let d_uv1 = uv1 - uv0;
     let d_uv2 = uv2 - uv0;
@@ -2126,12 +2121,42 @@ fn solve_matrix(
 
     let (a, b, c, d);
 
-    if det.abs() < 1e-15 {
-        // Degenerate triangle — fallback to zero gradient
+    if det.abs() < 1e-30 {
+        // Fully degenerate triangle — fallback to zero gradient
         a = 0.0;
         b = 0.0;
         c = 0.0;
         d = uv0;
+    } else if det.abs() < 1e-10 {
+        // Near-degenerate: use pseudoinverse via SVD of the 3x3 system
+        // [p0x p0y p0z 1] [a]   [uv0]
+        // [p1x p1y p1z 1] [b] = [uv1]
+        // [p2x p2y p2z 1] [c]   [uv2]
+        //                  [d]
+        // Work in centroid-relative coords, then shift d back.
+        // Build 3x3 matrix A = [p0; p1; p2] (centroid-relative) and solve A * [a,b,c]' = [uv0-d; uv1-d; uv2-d]
+        // Since it's rank-deficient, use the edge-based pseudoinverse:
+        // Construct the 2x3 matrix M = [e1^T; e2^T] and rhs = [d_uv1; d_uv2]
+        // Pseudoinverse: grad = M^T (M M^T)^{-1} rhs, regularized
+
+        // M M^T = [[e1e1, e1e2], [e1e2, e2e2]] — this is the Gram matrix we already have
+        // Use regularized inverse: add epsilon to diagonal
+        let reg = det.abs().sqrt() * 1e-6 + 1e-20;
+        let e1e1_r = e1e1 + reg;
+        let e2e2_r = e2e2 + reg;
+        let det_r = e1e1_r * e2e2_r - e1e2 * e1e2;
+        let inv_det_r = 1.0 / det_r;
+
+        let alpha = (e2e2_r * d_uv1 - e1e2 * d_uv2) * inv_det_r;
+        let beta = (e1e1_r * d_uv2 - e1e2 * d_uv1) * inv_det_r;
+
+        a = alpha * e1.x + beta * e2.x;
+        b = alpha * e1.y + beta * e2.y;
+        c = alpha * e1.z + beta * e2.z;
+
+        // d in centroid-relative space, then shift back
+        let d_local = uv0 - (a * p0.x + b * p0.y + c * p0.z);
+        d = d_local - (a * centroid.x + b * centroid.y + c * centroid.z);
     } else {
         let inv_det = 1.0 / det;
         let alpha = (e2e2 * d_uv1 - e1e2 * d_uv2) * inv_det;
@@ -2142,11 +2167,12 @@ fn solve_matrix(
         b = alpha * e1.y + beta * e2.y;
         c = alpha * e1.z + beta * e2.z;
 
-        // d = uv0 - grad · p0
-        d = uv0 - (a * point0.x + b * point0.y + c * point0.z);
+        // d in centroid-relative space, then shift back
+        let d_local = uv0 - (a * p0.x + b * p0.y + c * p0.z);
+        d = d_local - (a * centroid.x + b * centroid.y + c * centroid.z);
     }
 
-    // verify solution closeness
+    // verify solution closeness (against original points)
     let _uv0_check = a * point0.x + b * point0.y + c * point0.z + d;
     let _uv1_check = a * point1.x + b * point1.y + c * point1.z + d;
     let _uv2_check = a * point2.x + b * point2.y + c * point2.z + d;
