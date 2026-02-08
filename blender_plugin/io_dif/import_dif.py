@@ -554,13 +554,16 @@ def load(
             total_time += pt.msToNext
         itr.dif_props.total_time = total_time
 
-        first_type = waypoints[0].smoothingType
-        if first_type == 0:
+        if len(waypoints) > 0:
+            first_type = waypoints[0].smoothingType
+            if first_type == 0:
+                itr.dif_props.marker_type = "linear"
+            elif first_type == 1:
+                itr.dif_props.marker_type = "spline"
+            elif first_type == 2:
+                itr.dif_props.marker_type = "accelerate"
+        else:
             itr.dif_props.marker_type = "linear"
-        elif first_type == 1:
-            itr.dif_props.marker_type = "spline"
-        elif first_type == 2:
-            itr.dif_props.marker_type = "accelerate"
 
         for trigger_id in mover.triggerId:
             trigger = dif.triggers[trigger_id]
