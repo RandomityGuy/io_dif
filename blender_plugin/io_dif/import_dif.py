@@ -564,18 +564,19 @@ def load(
                 itr.dif_props.marker_type = "accelerate"
         else:
             itr.dif_props.marker_type = "linear"
-
-        for trigger_id in mover.triggerId:
-            trigger = dif.triggers[trigger_id]
-            tobj = bpy.data.objects.new(trigger.datablock, None)
-            tobj.dif_props.interior_type = "path_trigger"
-            tobj.dif_props.pathed_interior_target = itr
-            tobj.dif_props.game_entity_datablock = trigger.datablock
-            tobj.dif_props.target_marker = False
-            for key in trigger.properties.h:
-                prop = tobj.dif_props.game_entity_properties.add()
-                prop.key = key
-                prop.value = trigger.properties.get(key)
+            
+        if len(dif.triggers) > 0:    
+            for trigger_id in mover.triggerId:
+                trigger = dif.triggers[trigger_id]
+                tobj = bpy.data.objects.new(trigger.datablock, None)
+                tobj.dif_props.interior_type = "path_trigger"
+                tobj.dif_props.pathed_interior_target = itr
+                tobj.dif_props.game_entity_datablock = trigger.datablock
+                tobj.dif_props.target_marker = False
+                for key in trigger.properties.h:
+                    prop = tobj.dif_props.game_entity_properties.add()
+                    prop.key = key
+                    prop.value = trigger.properties.get(key)
 
             t_min = mathutils.Vector((float('inf'), float('inf'), float('inf')))
             t_max = mathutils.Vector((-float('inf'), -float('inf'), -float('inf')))
