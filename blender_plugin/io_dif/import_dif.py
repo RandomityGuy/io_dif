@@ -578,22 +578,22 @@ def load(
                     prop.key = key
                     prop.value = trigger.properties.get(key)
 
-            t_min = mathutils.Vector((float('inf'), float('inf'), float('inf')))
-            t_max = mathutils.Vector((-float('inf'), -float('inf'), -float('inf')))
-            for p in trigger.polyhedron.pointList:
-                t_min.x = min(t_min.x, p.x)
-                t_min.y = min(t_min.y, p.y)
-                t_min.z = min(t_min.z, p.z)
-
-                t_max.x = max(t_max.x, p.x)
-                t_max.y = max(t_max.y, p.y)
-                t_max.z = max(t_max.z, p.z)
-
-            tobj.location = t_min
-            tobj.scale = mathutils.Vector((t_max.x - t_min.x, t_max.y - t_min.y, t_max.z - t_min.z))
-            tobj.location.y += tobj.scale.y
-            tobj.location += mathutils.Vector((trigger.offset.x, trigger.offset.y, trigger.offset.z))
-            scene.collection.objects.link(tobj)
+                t_min = mathutils.Vector((float('inf'), float('inf'), float('inf')))
+                t_max = mathutils.Vector((-float('inf'), -float('inf'), -float('inf')))
+                for p in trigger.polyhedron.pointList:
+                    t_min.x = min(t_min.x, p.x)
+                    t_min.y = min(t_min.y, p.y)
+                    t_min.z = min(t_min.z, p.z)
+    
+                    t_max.x = max(t_max.x, p.x)
+                    t_max.y = max(t_max.y, p.y)
+                    t_max.z = max(t_max.z, p.z)
+    
+                tobj.location = t_min
+                tobj.scale = mathutils.Vector((t_max.x - t_min.x, t_max.y - t_min.y, t_max.z - t_min.z))
+                tobj.location.y += tobj.scale.y
+                tobj.location += mathutils.Vector((trigger.offset.x, trigger.offset.y, trigger.offset.z))
+                scene.collection.objects.link(tobj)
 
     if dif.gameEntities != None:
         for ge in dif.gameEntities:
