@@ -353,6 +353,8 @@ class GamePathedInterior:
 
         marker_list = MarkerList()
 
+        cum_times = [0] # Used for "target marker" triggers and "start index"
+
         if(marker_ob):
             marker_pts = (
                 marker_ob.splines[0].bezier_points
@@ -367,13 +369,13 @@ class GamePathedInterior:
                 smoothing_type = 1
             elif path_type == "accelerate":
                 smoothing_type = 2
+            else:
+                smoothing_type = 0
 
             curve_transform = None
             curve_obj = next((obj for obj in bpy.data.objects if obj.data == marker_ob.original), None)
             if curve_obj:
                 curve_transform = curve_obj.matrix_world
-
-            cum_times = [0] # Used for "target marker" triggers and "start index"
 
             for index, pt in enumerate(marker_pts):
                 if index == len(marker_pts)-1:
